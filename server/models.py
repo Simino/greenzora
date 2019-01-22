@@ -1,4 +1,5 @@
 from server import server_app, db
+from flask_sqlalchemy import event
 
 # TODO: Fix column types + properties (nullable, etc.)
 # TODO: What is contributor (Paper metadata)?
@@ -7,17 +8,17 @@ from server import server_app, db
 # ------------ PAPER METADATA ---------------
 
 # The Paper table stores all scientific papers with their metadata and their corresponding classification
-# uid: The uid of the paper
-# title: The title of the paper
-# creators: The authors of the paper ([Paper] many to many [Creator])
-# subjects: The subjects of the paper ([Paper] many to many [Subject])
-# keywords: The keywords of the paper ([Paper] many to many [Keyword])
-# description: The abstract of the paper
-# publisher: The publisher of the paper ([Paper] many to one [Publisher])
-# date: The publishing date of the paper
-# resource_types: The resource types of the paper ([Paper] many to many [Type])
-# language: The language of the paper ([Paper] many to one [Language])
-# sustainable: Flag that tells us whether a paper is sustainable or not
+# uid:              The uid of the paper
+# title:            The title of the paper
+# creators:         The authors of the paper ([Paper] many to many [Creator])
+# subjects:         The subjects of the paper ([Paper] many to many [Subject])
+# keywords:         The keywords of the paper ([Paper] many to many [Keyword])
+# description:      The abstract of the paper
+# publisher:        The publisher of the paper ([Paper] many to one [Publisher])
+# date:             The publishing date of the paper
+# resource_types:   The resource types of the paper ([Paper] many to many [Type])
+# language:         The language of the paper ([Paper] many to one [Language])
+# sustainable:      Flag that tells us whether a paper is sustainable or not
 class Paper(db.Model):
     __tablename__ = 'papers'
     uid = db.Column(db.String(200), primary_key=True)
@@ -121,10 +122,12 @@ class Language(db.Model):
 
 # ------------ SETTINGS & PARAMETERS ---------------
 
-# Stores the different settings of the server
+# Stores the different settings of the server.
+#
+# XYZ:          asfölk
 class Setting(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String(60), nullable=False)                     # The name of the setting
+    __tablename__ = 'settings'
+    name = db.Column(db.String(60), primary_key=True)                     # The name of the setting
     value = db.Column(db.String(60), nullable=False)                    # The value of the setting
 
     # Method that defines how an object of this class is printed. Useful for debugging.
@@ -132,10 +135,12 @@ class Setting(db.Model):
         return self.name + ': ' + self.value
 
 
-# Stores server parameters such as the timestamp of the last pull from ZORA
+# Stores server parameters.
+#
+# last_zora_pull:       Timestamp (YYYY-MM-DDThh:mm:ssZ) of the date, when the server did the last pull from ZORA
 class OperationParameter(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String(60), nullable=False)                     # The name of the parameter
+    __tablename__ = 'operation_parameters'
+    name = db.Column(db.String(60), primary_key=True)                     # The name of the parameter
     value = db.Column(db.String(60))                                    # The value of the parameter
 
     # Method that defines how an object of this class is printed. Useful for debugging.
@@ -145,9 +150,9 @@ class OperationParameter(db.Model):
 
 # TODO: Needed?
 # The different types that settings and parameter tables can have.
-# 1 = int
-# 2 = string
-# 3 = date
+# 1:    int
+# 2:    string
+# 3:    date
 class Type(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(60), nullable=False)
@@ -157,6 +162,16 @@ class Type(db.Model):
         return self.id + ': ' + self.name
 
 # ------------ END SETTINGS & PARAMETERS ---------------
+
+
+# ------------ EVENT LISTENERS ---------------
+
+# Setup database listeners
+@event.listens_for(Setting.value, 'modified')
+def handle_zora_url_change(target, value, oldvalue, initiator):
+    print(value)
+
+# ------------ END EVENT LISTENERS ---------------
 
 
 # ------------ CLI COMMANDS ---------------
@@ -171,14 +186,15 @@ def init_db():
     print('Database initialized')
 
 
+# TODO: Does not clear database??? (file still contains tables)
 # Delete the database
 @server_app.cli.command()
 def delete_db():
     """Deletes the database and it's metadata"""
-    db.drop_all()
-    print('Database deleted')
     db.metadata.clear()
     print('Metadata cleared')
+    db.drop_all()
+    print('Database deleted')
 
 
 # Reset the database
@@ -198,12 +214,12 @@ def initialize_db():
 
 
 def initialize_default_settings():
-    db.session.add(Setting(name='setting1', value='value1'))
-    db.session.add(Setting(name='setting2', value='value2'))
+    db.session.add(Setting(name='zora_url', value='https://www.zora.uzh.ch/cgi/oai2'))
     db.session.commit()
 
 
 def initialize_operation_parameters():
-    db.session.add(OperationParameter(name='lastZoraPull'))
+    db.session.add(OperationParameter(name='last_zora_pull'))
+    db.session.commit()
 
 # ------------ END CLI COMMANDS ---------------
