@@ -1,6 +1,9 @@
 from flask import jsonify
-from server import server_app, db, models
+from server import db, server_app
+from server.models import Paper, ServerSetting
 
+
+# ----------------- ROUTES -----------------------
 
 @server_app.route('/data/papers/<parameters>')
 def get_papers(parameters):
@@ -24,30 +27,35 @@ def get_annotation():
     return jsonify(annotation)
 
 
+# TODO handle return
 @server_app.route('/annotation/<uid>/<classification>', methods=['POST'])
 def classify(uid, classification):
-    db.session.add(models.Paper(uid=uid, sustainable=classification))
+    paper = Paper(uid=uid, sustainable=classification)
+    db.session.merge(paper)
     db.session.commit()
+    return jsonify('SOMETHING')
 
 
 @server_app.route('/settings')
 def get_settings():
-    # TODO: Get settings from the database
     settings = {}
     return jsonify(settings)
 
 
+# TODO handle return
 @server_app.route('/settings/<parameters>', methods=['POST'])
 def set_settings(parameters):
     settings_dict = parse_parameters(parameters)
     for key, value in settings_dict.items():
-        setting = models.Setting.query.filter_by(name=key)
-        setting.value = value
+        setting = ServerSetting(name=key, value=value)
+        db.session.merge(setting)
     db.session.commit()
-    return jsonify(load_settings())
+    return jsonify('SOMETHING')
 
 # TODO: Add Rest
 #@server.route('/data/papers/<parameters>', methods=['GET', 'POST'])
+
+# ----------------- END ROUTES -----------------------
 
 
 # ------------ HELPER FUNCTIONS ---------------
@@ -65,9 +73,11 @@ def parse_parameters(parameters):
 # Get the settings from the database as a dictionary ({name: value, name: value, ...)
 def load_settings():
     setting_dictionary = {}
-    settings = models.Setting.query.all()
+    settings = ServerSetting.query.all()
     for setting in settings:
         name = setting.name
         value = setting.value
         setting_dictionary[name] = value
     return setting_dictionary
+
+# ------------ END HELPER FUNCTIONS ---------------
