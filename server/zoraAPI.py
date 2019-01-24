@@ -49,8 +49,8 @@ def get_records():
             if utils.is_debug():
                 count += 1
                 print('\nCOUNT: ' + str(count) + '\n\n')
-                if count >= 100:
-                    break
+                #if count >= 100:
+                #    break
         last_zora_pull.value = new_last_zora_pull
         db.session.commit()
     except NoRecordsMatchError as error:

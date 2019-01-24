@@ -27,6 +27,6 @@ interval_setting = models.ServerSetting.query.filter_by(name='zora_pull_interval
 job_interval = utils.parse_db_value(interval_setting)
 server_app.apscheduler.add_job(func=zoraAPI.get_records,
                                trigger='interval',
-                               minutes=job_interval,
+                               days=job_interval,
                                next_run_time=datetime.now(),
                                id=server_app.config['ZORA_API_JOB_ID'])

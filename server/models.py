@@ -36,6 +36,7 @@ class Paper(db.Model):
     language = db.relationship('Language')
     relation = db.Column(db.String(200))
     sustainable = db.Column(db.Boolean)
+    annotated = db.Column(db.Boolean, default=False)
 
     # Method that defines how an object of this class is printed. Useful for debugging.
     # If no value is set, print 'NULL'
@@ -57,6 +58,10 @@ class Paper(db.Model):
         output += 'relation: ' + (self.relation if self.relation is not None else 'NULL') + '\n'
         output += 'sustainable: ' + (self.sustainable if self.sustainable is not None else 'NULL')
         return output
+
+    def set_annotation(self, sustainable):
+        self.sustainable = sustainable
+        self.annotated = True
 
 
 class Creator(db.Model):
@@ -206,8 +211,8 @@ def initialize_types():
 def initialize_default_settings():
     type_string = Type.query.filter_by(name='string').first()
     type_int = Type.query.filter_by(name='int').first()
-    db.session.add(ServerSetting(name='zora_url', value='https://www.zora.uzh.ch/cgi/oai2', type=type_string))
-    db.session.add(ServerSetting(name='zora_pull_interval', value='14', type=type_int))
+    db.session.add(ServerSetting(name='zora_url', value=server_app.config['DEFAULT_ZORA_URL'], type=type_string))
+    db.session.add(ServerSetting(name='zora_pull_interval', value=server_app.config['DEFAULT_ZORA_PULL_INTERVAL'], type=type_int))
     db.session.commit()
 
 
@@ -306,7 +311,7 @@ def handle_setting_change(target, value, oldvalue, initiator):
     if setting_name == 'zora_pull_interval':
         job = scheduler.get_job(id=server_app.config['ZORA_API_JOB_ID'])
         if job:
-            job.reschedule(trigger='interval', minutes=value)
+            job.reschedule(trigger='interval', days=value)
 
     print('Setting "' + setting_name + '" was changed to ' + str(value) + '.')
 
