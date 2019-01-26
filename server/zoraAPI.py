@@ -11,7 +11,7 @@ METADATA_PREFIX = 'oai_dc'
 
 # Set up the API header
 def create_connection():
-    zora_url = ServerSetting.query.filter_by(name='zora_url').first().value
+    zora_url = db.session.query(ServerSetting).filter_by(name='zora_url').first().value
     registry = MetadataRegistry()
     registry.registerReader(METADATA_PREFIX, oai_dc_reader)
     client = Client(zora_url, registry)
@@ -32,9 +32,9 @@ def get_records():
     args = {'metadataPrefix': METADATA_PREFIX}
 
     # If we previously pulled data from ZORA, only get the recent changes of the repository
-    last_zora_pull = OperationParameter.query.filter_by(name='last_zora_pull').first()
+    last_zora_pull = db.session.query(OperationParameter).filter_by(name='last_zora_pull').first()
     if last_zora_pull.value:
-        args['from_'] = utils.parse_db_value(last_zora_pull.value, last_zora_pull.type_name)
+        args['from_'] = utils.parse_db_value(last_zora_pull)
     # We want to store the starting time to update last_zora_pull when we are done
     new_last_zora_pull = datetime.utcnow()
 

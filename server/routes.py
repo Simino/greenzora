@@ -73,7 +73,7 @@ def parse_parameters(parameters):
 # Get the settings from the database as a dictionary ({name: value, name: value, ...)
 def load_settings():
     setting_dictionary = {}
-    settings = ServerSetting.query.all()
+    settings = db.session.query(ServerSetting).all()
     for setting in settings:
         name = setting.name
         value = setting.value

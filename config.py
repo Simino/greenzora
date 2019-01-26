@@ -15,4 +15,4 @@ DEFAULT_ZORA_URL = 'https://www.zora.uzh.ch/cgi/oai2'
 
 
 # Machine Learning Tool Config
-LEGACY_ANNOTATIONS_PATH = os.path.join(BASE_DIR, 'server\static\legacy_annotations.csv')
+LEGACY_ANNOTATIONS_PATH = os.path.join(BASE_DIR, 'server\static\legacy_annotations.json')

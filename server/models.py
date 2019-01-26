@@ -184,17 +184,17 @@ def initialize_db():
     db.create_all()
 
     # Initialize the default settings if the table is empty
-    if Type.query.first() is None:
+    if db.session.query(Type).first() is None:
         initialize_types()
         print('Types initialized')
 
     # Initialize the default settings if the table is empty
-    if ServerSetting.query.first()is None:
+    if db.session.query(ServerSetting).first()is None:
         initialize_default_settings()
         print('Default settings initialized')
 
     # Initialize the default operation parameters if the table is empty
-    if OperationParameter.query.first() is None:
+    if db.session.query(OperationParameter).first() is None:
         initialize_operation_parameters()
         print('Operation parameters initialized')
 
@@ -209,15 +209,15 @@ def initialize_types():
 
 
 def initialize_default_settings():
-    type_string = Type.query.filter_by(name='string').first()
-    type_int = Type.query.filter_by(name='int').first()
+    type_string = db.session.query(Type).filter_by(name='string').first()
+    type_int = db.session.query(Type).filter_by(name='int').first()
     db.session.add(ServerSetting(name='zora_url', value=server_app.config['DEFAULT_ZORA_URL'], type=type_string))
     db.session.add(ServerSetting(name='zora_pull_interval', value=server_app.config['DEFAULT_ZORA_PULL_INTERVAL'], type=type_int))
     db.session.commit()
 
 
 def initialize_operation_parameters():
-    type_datetime = Type.query.filter_by(name='datetime').first()
+    type_datetime = db.session.query(Type).filter_by(name='datetime').first()
     db.session.add(OperationParameter(name='last_zora_pull', type=type_datetime))
     db.session.commit()
 
