@@ -13,6 +13,8 @@ ZORA_API_JOB_ID = 'zoraAPI_get_records_job'
 DEFAULT_ZORA_PULL_INTERVAL = 14
 DEFAULT_ZORA_URL = 'https://www.zora.uzh.ch/cgi/oai2'
 
+# Zora API
+METADATA_PREFIX = 'oai_dc'
 
-# Machine Learning Tool Config
+# Machine Learning Tool
 LEGACY_ANNOTATIONS_PATH = os.path.join(BASE_DIR, 'server\static\legacy_annotations.json')

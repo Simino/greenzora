@@ -2,80 +2,82 @@ from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, oai_dc_reader
 from oaipmh.error import NoRecordsMatchError
 from datetime import datetime
-from server import db, utils
-from server.models import ServerSetting, OperationParameter, create_or_update_paper
-
-# The metadata prefix defines the format of the metadata
-METADATA_PREFIX = 'oai_dc'
 
 
-# Set up the API header
-def create_connection():
-    zora_url = db.session.query(ServerSetting).filter_by(name='zora_url').first().value
-    registry = MetadataRegistry()
-    registry.registerReader(METADATA_PREFIX, oai_dc_reader)
-    client = Client(zora_url, registry)
-    return client
+class ZoraAPI:
 
+    def __init__(self, url, metadata_prefix):
+        registry = MetadataRegistry()
+        registry.registerReader(metadata_prefix, oai_dc_reader)
+        self.client = Client(url, registry)
 
-# Gets one specific paper from the ZORA repository
-def get_record(uid):
-    client = create_connection()
-    record = client.getRecord(identifier=uid, metadataPrefix=METADATA_PREFIX)
-    metadata_dict = parse_record(record)
-    create_or_update_paper(metadata_dict)
+        self.metadata_prefix = metadata_prefix
 
+    # Get all metadata dictionaries from
+    def get_metadata_dicts(self, from_):
+        record_list = self.get_records(from_)
+        metadata_dict_list = self.parse_records(record_list)
+        return metadata_dict_list
 
-# Gets the papers from the ZORA repository and stores them in the database
-def get_records():
-    client = create_connection()
-    args = {'metadataPrefix': METADATA_PREFIX}
+    # Gets one specific paper from the ZORA repository and returns the metadata from it
+    def get_record(self, uid):
+        record = self.client.getRecord(identifier=uid, metadataPrefix=self.metadata_prefix)
 
-    # If we previously pulled data from ZORA, only get the recent changes of the repository
-    last_zora_pull = db.session.query(OperationParameter).filter_by(name='last_zora_pull').first()
-    if last_zora_pull.value:
-        args['from_'] = utils.parse_db_value(last_zora_pull)
-    # We want to store the starting time to update last_zora_pull when we are done
-    new_last_zora_pull = datetime.utcnow()
+        return record
 
-    # We get the papers in batches of 100 from zora, but can iterate through ALL entries because listRecords returns
-    # an iterable pseudo-list (in the background there is still one API request per 100 papers).
-    if utils.is_debug():
-        count = 0
-    try:
-        for record in client.listRecords(**args):
-            metadata_dict = parse_record(record)
-            create_or_update_paper(metadata_dict)
-            if utils.is_debug():
-                count += 1
-                print('\nCOUNT: ' + str(count) + '\n\n')
-                #if count >= 100:
-                #    break
-        last_zora_pull.value = new_last_zora_pull
-        db.session.commit()
-    except NoRecordsMatchError as error:
-        print(error)
-        print('No records were found')
+    # Gets the papers from the ZORA repository and returns their metadata in form of a list of dictionaries
+    def get_records(self, from_):
+        args = {'metadataPrefix': self.metadata_prefix}
 
+        # Add the from_ argument if it is defined (this is used to get only the most recent papers/changes)
+        if from_:
+            args['from_'] = from_
 
-# We parse the received metadata from the record in the form of a dictionary where all fields but uid are lists
-def parse_record(record):
-    metadata_dict = {}
-    if record[1]:
+        # Get the relevant papers from ZORA and parse them
+        record_list = []
+        try:
+            record_list = self.client.listRecords(**args)
+        except NoRecordsMatchError as error:
+            print(error)
+            print('No records were found')
+        finally:
+            return record_list
+
+    # This function parses a record into a dictionary. It also splits up the 'subject' field into 'subjects' and 'keywords'.
+    def parse_record(self, record):
+        if not record[0] or not record[1]:
+            return
+
         metadata_dict = dict(record[1].getMap())
-    metadata_dict['uid'] = record[0].identifier()
 
-    # If the field subject contains a comma separated list, it is a list of keywords. Otherwise it is the subject.
-    if 'subject' in metadata_dict:
+        metadata_dict['uid'] = record[0].identifier()
+        metadata_dict['creators'] = metadata_dict.pop('creator')
+
+        # If the field 'subject' contains a comma separated list, it is a list of keywords. Otherwise it is a subject.
         subject_list = []
         keyword_list = []
-        for item in metadata_dict['subject']:
-            if item.find(',') != -1:
-                for keyword in item.split(','):
-                    keyword_list.append(keyword)
-            else:
-                subject_list.append(item)
-        metadata_dict['subject'] = subject_list
-        metadata_dict['keyword'] = keyword_list
+        if 'subject' in metadata_dict:
+            for item in metadata_dict['subject']:
+                if item.find(',') != -1:
+                    for keyword in item.split(','):
+                        keyword_list.append(keyword)
+                else:
+                    subject_list.append(item)
+        metadata_dict['subjects'] = subject_list
+        metadata_dict['keywords'] = keyword_list
+        metadata_dict['resource_types'] = metadata_dict.pop('type')
 
-    return metadata_dict
+        return metadata_dict
+
+    # This function parses the a record from ZORA in a easier to use dictionary.
+    def parse_records(self, record_list):
+        metadata_dict_list = []
+        count = 0
+        for record in record_list:
+            metadata_dict = self.parse_record(record)
+            if metadata_dict:
+                metadata_dict_list.append(metadata_dict)
+            count += 1
+            if count >= 5000:
+                break;
+        return metadata_dict_list
