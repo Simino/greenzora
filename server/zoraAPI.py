@@ -1,7 +1,6 @@
 from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, oai_dc_reader
 from oaipmh.error import NoRecordsMatchError
-from datetime import datetime
 
 
 class ZoraAPI:
@@ -44,7 +43,8 @@ class ZoraAPI:
             return record_list
 
     # This function parses a record into a dictionary. It also splits up the 'subject' field into 'subjects' and 'keywords'.
-    def parse_record(self, record):
+    @staticmethod
+    def parse_record(record):
         if not record[0] or not record[1]:
             return
 
@@ -78,6 +78,6 @@ class ZoraAPI:
             if metadata_dict:
                 metadata_dict_list.append(metadata_dict)
             count += 1
-            if count >= 5000:
-                break;
+            if count >= 1000:
+                break
         return metadata_dict_list

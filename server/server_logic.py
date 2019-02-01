@@ -57,6 +57,13 @@ class ServerLogic:
 
         print('ZORA pull job started')
 
+        # Register the database event listener for the server settings table
+        @event.listens_for(ServerSetting.value, 'set')
+        def handle_setting_change(target, value, oldvalue, initiator):
+            self.handle_setting_change(target, value, oldvalue, initiator)
+
+        print('Database event handler registered')
+
         print('Server initialized')
 
     # This function gets the latest papers from ZORA, which are then classified and stored in the database.
@@ -112,8 +119,9 @@ class ServerLogic:
 
         print('Legacy annotations imported')
 
-    # Add event listeners for changes to the server settings
-    @event.listens_for(ServerSetting.value, 'set')
+    # This method handles changes to the settings.
+    # zora_pull_interval:   Reschedules the zora_pull_job with the new interval
+    # zora_url:             Creates a new connection to the ZORA API with the new URL
     def handle_setting_change(self, target, value, oldvalue, initiator):
         setting_name = target.name
 
@@ -126,9 +134,11 @@ class ServerLogic:
         elif setting_name == 'zora_url':
 
             # Create a new connection with the new url
-            self.zoraAPI.create_connection(value)
+            metadata_prefix = self.server_app.config['METADATA_PREFIX']
+            self.zoraAPI = self.zoraAPI = ZoraAPI(value, metadata_prefix)
 
-        print('Setting "' + setting_name + '" was changed to ' + str(value) + '.')
+        if is_debug():
+            print('Setting "' + setting_name + '" was changed to ' + str(value) + '.')
 
     def create_new_model(self):
 
