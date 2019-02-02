@@ -4,13 +4,13 @@ from oaipmh.error import NoRecordsMatchError
 
 
 class ZoraAPI:
+    METADATA_PREFIX = 'oai_dc'
 
-    def __init__(self, url, metadata_prefix):
+    # TODO: refactor metadata
+    def __init__(self, url):
         registry = MetadataRegistry()
-        registry.registerReader(metadata_prefix, oai_dc_reader)
+        registry.registerReader(ZoraAPI.METADATA_PREFIX, oai_dc_reader)
         self.client = Client(url, registry)
-
-        self.metadata_prefix = metadata_prefix
 
     # Get all metadata dictionaries from
     def get_metadata_dicts(self, from_):
@@ -20,13 +20,13 @@ class ZoraAPI:
 
     # Gets one specific paper from the ZORA repository and returns the metadata from it
     def get_record(self, uid):
-        record = self.client.getRecord(identifier=uid, metadataPrefix=self.metadata_prefix)
+        record = self.client.getRecord(identifier=uid, metadataPrefix=ZoraAPI.METADATA_PREFIX)
 
         return record
 
     # Gets the papers from the ZORA repository and returns their metadata in form of a list of dictionaries
     def get_records(self, from_):
-        args = {'metadataPrefix': self.metadata_prefix}
+        args = {'metadataPrefix': ZoraAPI.METADATA_PREFIX}
 
         # Add the from_ argument if it is defined (this is used to get only the most recent papers/changes)
         if from_:

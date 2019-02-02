@@ -10,6 +10,7 @@ import json
 
 
 class ServerLogic:
+    ZORA_API_JOB_ID = 'zoraAPI_get_records_job'
 
     # Init stuff in __init__?
     def __init__(self, server_app, db):
@@ -17,9 +18,8 @@ class ServerLogic:
         self.db = db
 
         # Initialize the ZORA API
-        metadata_prefix = server_app.config['METADATA_PREFIX']
         url = ServerSetting.get('zora_url')
-        self.zoraAPI = ZoraAPI(url, metadata_prefix)
+        self.zoraAPI = ZoraAPI(url)
 
         print('ZORA API initialized')
 
@@ -53,7 +53,7 @@ class ServerLogic:
                                        trigger='interval',
                                        days=job_interval,
                                        next_run_time=datetime.now(),
-                                       id=self.server_app.config['ZORA_API_JOB_ID'])
+                                       id=ServerLogic.ZORA_API_JOB_ID)
 
         print('ZORA pull job started')
 
@@ -128,14 +128,13 @@ class ServerLogic:
         if setting_name == 'zora_pull_interval':
 
             # Change the interval of the zora api job
-            job = self.scheduler.get_job(id=self.server_app.config['ZORA_API_JOB_ID'])
+            job = self.scheduler.get_job(id=ServerLogic.ZORA_API_JOB_ID)
             if job:
                 job.reschedule(trigger='interval', days=value)
         elif setting_name == 'zora_url':
 
             # Create a new connection with the new url
-            metadata_prefix = self.server_app.config['METADATA_PREFIX']
-            self.zoraAPI = self.zoraAPI = ZoraAPI(value, metadata_prefix)
+            self.zoraAPI = self.zoraAPI = ZoraAPI(value)
 
         if is_debug():
             print('Setting "' + setting_name + '" was changed to ' + str(value) + '.')
