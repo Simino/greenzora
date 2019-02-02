@@ -1,7 +1,7 @@
-from flask import jsonify, redirect, url_for
+from flask import jsonify, redirect, url_for, flash
 from server import db, server_app
 from server.models import Paper, ServerSetting, User
-from flask_login import current_user, login_user
+from flask_login import current_user, login_user, logout_user
 
 
 # ----------------- ROUTES -----------------------
@@ -10,9 +10,21 @@ from flask_login import current_user, login_user
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('/annotation'))
-    form = 'bla'
+    form = 'TODO'   # LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_ by(username=form.username.data).first()
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        return redirect(url_for('/annotation'))
+    return 'TODO'   # render_template('login.html', title='Sign In', form=form)
+
+
+@server_app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('/data/papers/'))
 
 @server_app.route('/data/papers/<parameters>')
 def get_papers(parameters):

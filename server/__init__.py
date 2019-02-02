@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager
 
 # Create the app
 server_app = Flask(__name__)
@@ -9,6 +10,9 @@ server_app.config.from_object('config')
 
 # Load the database
 db = SQLAlchemy(server_app)
+
+# Initialize the LoginManager
+login = LoginManager(server_app)
 
 # Not at top of file to avoid circular imports (we need server_app)
 from server import models, server_logic, routes
