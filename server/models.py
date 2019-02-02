@@ -1,5 +1,8 @@
-from server import server_app, db, utils
+from server import server_app, db, login
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin
+
 
 # TODO: Fix column types (string length!) + properties (nullable, etc.)
 
@@ -22,19 +25,19 @@ from datetime import datetime
 # annotated:        Flag that tells us whether a paper is annotated or not
 class Paper(db.Model):
     __tablename__ = 'papers'
-    uid = db.Column(db.String(200), primary_key=True)
-    title = db.Column(db.String(200))
+    uid = db.Column(db.String(256), primary_key=True)
+    title = db.Column(db.String(256))
     creators = db.relationship('Creator', secondary='paper_creator_association_table')
     subjects = db.relationship('Subject', secondary='paper_subject_association_table')
     keywords = db.relationship('Keyword', secondary='paper_keyword_association_table')
     description = db.Column(db.Text())
-    publisher_name = db.Column(db.String(200), db.ForeignKey('publishers.name'))
+    publisher_id = db.Column(db.Integer, db.ForeignKey('publishers.id'))
     publisher = db.relationship('Publisher')
-    date = db.Column(db.String(30))
+    date = db.Column(db.String(64))
     resource_types = db.relationship('ResourceType', secondary='paper_resource_type_association_table')
-    language_name = db.Column(db.String(200), db.ForeignKey('languages.name'))
+    language_id = db.Column(db.Integer, db.ForeignKey('languages.id'))
     language = db.relationship('Language')
-    relation = db.Column(db.String(200))
+    relation = db.Column(db.String(256))
     sustainable = db.Column(db.Boolean)
     annotated = db.Column(db.Boolean, default=False)
 
@@ -45,17 +48,17 @@ class Paper(db.Model):
         output = 'uid: ' + self.uid + '\n'
         output += 'title: ' + (self.title if self.title is not None else 'NULL') + '\n'
         for creator in self.creators:
-            output += 'creator: ' + (creator.name if self.description is not None else 'NULL') + '\n'
+            output += 'creator: ' + (str(creator.last_name) + str(creator.first_name) if creator is not None else 'NULL') + '\n'
         for subject in self.subjects:
-            output += 'subject: ' + (subject.name if self.description is not None else 'NULL') + '\n'
+            output += 'subject: ' + (str(subject.name) if subject is not None else 'NULL') + '\n'
         for keyword in self.keywords:
-            output += 'keyword: ' + (keyword.name if self.description is not None else 'NULL') + '\n'
+            output += 'keyword: ' + (str(keyword.name) if keyword is not None else 'NULL') + '\n'
         output += 'description: ' + (self.description if self.description is not None else 'NULL') + '\n'
-        output += 'publisher: ' + (self.publisher.name if self.publisher is not None else 'NULL') + '\n'
+        output += 'publisher: ' + (str(self.publisher.name) if self.publisher is not None else 'NULL') + '\n'
         output += 'date: ' + (self.date if self.date is not None else 'NULL') + '\n'
         for resource_type in self.resource_types:
-            output += 'resource_type: ' + (resource_type.name if self.description is not None else 'NULL') + '\n'
-        output += 'language: ' + (self.language.name if self.language is not None else 'NULL') + '\n'
+            output += 'resource_type: ' + (str(resource_type.name) if resource_type is not None else 'NULL') + '\n'
+        output += 'language: ' + (str(self.language.name) if self.language is not None else 'NULL') + '\n'
         output += 'relation: ' + (self.relation if self.relation is not None else 'NULL') + '\n'
         output += 'sustainable: ' + (str(self.sustainable) if self.sustainable is not None else 'NULL') + '\n'
         output += 'annotated: ' + (str(self.annotated) if self.annotated is not None else 'NULL') + '\n'
@@ -88,7 +91,10 @@ class Paper(db.Model):
         # Create creators if they don't exist
         creators = []
         for creator_name in creator_list:
-            creator = Creator(name=creator_name)
+            split = creator_name.split(',')
+            last_name = split[0]
+            first_name = split[1] if len(split) >= 2 else None
+            creator = Creator(first_name=first_name, last_name=last_name)
             creators.append(db.session.merge(creator))
 
         # Create subjects if they don't exist
@@ -149,72 +155,79 @@ class Paper(db.Model):
 
 class Creator(db.Model):
     __tablename__ = 'creators'
-    name = db.Column(db.String(60), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    first_name = db.Column(db.String(64))
+    last_name = db.Column(db.String(64))
     papers = db.relationship('Paper', secondary='paper_creator_association_table')
 
 
 class PaperCreator(db.Model):
     __tablename__ = 'paper_creator_association_table'
     id = db.Column(db.Integer, primary_key=True)
-    paper_uid = db.Column(db.String(200), db.ForeignKey('papers.uid'))
-    creator_name = db.Column(db.String(200), db.ForeignKey('creators.name'))
+    paper_uid = db.Column(db.String(256), db.ForeignKey('papers.uid'))
+    creator_id = db.Column(db.Integer, db.ForeignKey('creators.id'))
     paper = db.relationship(Paper, backref=db.backref('paper_creator_association_table', cascade='all, delete-orphan'))
     creator = db.relationship(Creator, backref=db.backref('paper_creator_association_table', cascade='all, delete-orphan'))
 
 
 class Subject(db.Model):
     __tablename__ = 'subjects'
-    name = db.Column(db.String(200), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(256))
     papers = db.relationship('Paper', secondary='paper_subject_association_table')
 
 
 class PaperSubject(db.Model):
     __tablename__ = 'paper_subject_association_table'
     id = db.Column(db.Integer, primary_key=True)
-    paper_uid = db.Column(db.String(200), db.ForeignKey('papers.uid'))
-    subject_name = db.Column(db.String(200), db.ForeignKey('subjects.name'))
+    paper_uid = db.Column(db.String(256), db.ForeignKey('papers.uid'))
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'))
     paper = db.relationship(Paper, backref=db.backref('paper_subject_association_table', cascade='all, delete-orphan'))
     subject = db.relationship(Subject, backref=db.backref('paper_subject_association_table', cascade='all, delete-orphan'))
 
 
 class Keyword(db.Model):
     __tablename__ = 'keywords'
-    name = db.Column(db.String(60), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(64))
     papers = db.relationship('Paper', secondary='paper_keyword_association_table')
 
 
 class PaperKeyword(db.Model):
     __tablename__ = 'paper_keyword_association_table'
     id = db.Column(db.Integer, primary_key=True)
-    paper_uid = db.Column(db.String(200), db.ForeignKey('papers.uid'))
-    keyword_name = db.Column(db.String(200), db.ForeignKey('keywords.name'))
+    paper_uid = db.Column(db.String(256), db.ForeignKey('papers.uid'))
+    keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.id'))
     paper = db.relationship(Paper, backref=db.backref('paper_keyword_association_table', cascade='all, delete-orphan'))
     keyword = db.relationship(Keyword, backref=db.backref('paper_keyword_association_table', cascade='all, delete-orphan'))
 
 
 class Publisher(db.Model):
     __tablename__ = 'publishers'
-    name = db.Column(db.String(200), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(256))
 
 
 class ResourceType(db.Model):
     __tablename__ = 'resource_types'
-    name = db.Column(db.String(60), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(64))
     papers = db.relationship('Paper', secondary='paper_resource_type_association_table')
 
 
 class PaperResourceType(db.Model):
     __tablename__ = 'paper_resource_type_association_table'
     id = db.Column(db.Integer, primary_key=True)
-    paper_uid = db.Column(db.String(200), db.ForeignKey('papers.uid'))
-    resource_type_name = db.Column(db.String(200), db.ForeignKey('resource_types.name'))
+    paper_uid = db.Column(db.String(256), db.ForeignKey('papers.uid'))
+    resource_type_id = db.Column(db.Integer, db.ForeignKey('resource_types.id'))
     paper = db.relationship(Paper, backref=db.backref('paper_resource_type_association_table', cascade='all, delete-orphan'))
     resource_type = db.relationship(ResourceType, backref=db.backref('paper_resource_type_association_table', cascade='all, delete-orphan'))
 
 
 class Language(db.Model):
     __tablename__ = 'languages'
-    name = db.Column(db.String(60), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(64))
 
 
 # Stores the different settings of the server.
@@ -222,9 +235,9 @@ class Language(db.Model):
 # zora_pull_interval:   The amount of days between different ZORA repository pulls (int)
 class ServerSetting(db.Model):
     __tablename__ = 'settings'
-    name = db.Column(db.String(60), primary_key=True)                     # The name of the setting
-    value = db.Column(db.String(60), nullable=False)                    # The value of the setting
-    type_name = db.Column(db.String(60), db.ForeignKey('types.name'))    # The type of the value
+    name = db.Column(db.String(64), primary_key=True)                     # The name of the setting
+    value = db.Column(db.String(64), nullable=False)                    # The value of the setting
+    type_name = db.Column(db.String(64), db.ForeignKey('types.name'))    # The type of the value
     type = db.relationship('Type')
 
     # Method that defines how an object of this class is printed. Useful for debugging.
@@ -253,9 +266,9 @@ class ServerSetting(db.Model):
 # zora_pull_interval:   The time in days between different pull requests from the ZORA repository (int)
 class OperationParameter(db.Model):
     __tablename__ = 'operation_parameters'
-    name = db.Column(db.String(60), primary_key=True)                     # The name of the parameter
-    value = db.Column(db.String(60))                                    # The value of the parameter
-    type_name = db.Column(db.String(60), db.ForeignKey('types.name'))    # The type of the value
+    name = db.Column(db.String(64), primary_key=True)                     # The name of the parameter
+    value = db.Column(db.String(64))                                    # The value of the parameter
+    type_name = db.Column(db.String(64), db.ForeignKey('types.name'))    # The type of the value
     type = db.relationship('Type')
 
     # Method that defines how an object of this class is printed. Useful for debugging.
@@ -285,7 +298,7 @@ class OperationParameter(db.Model):
 # boolean:      A boolean value
 class Type(db.Model):
     __tablename__ = 'types'
-    name = db.Column(db.String(60), primary_key=True)
+    name = db.Column(db.String(64), primary_key=True)
 
     # Method that defines how an object of this class is printed. Useful for debugging.
     def __repr__(self):
@@ -308,6 +321,36 @@ class Type(db.Model):
         elif self.name == 'boolean':
             return True if value == 'True' else False
 
+
+class Translation(db.Model):
+    __tablename__ = 'translations'
+    name = db.Column(db.String(256), primary_key=True)
+    eng = db.Column(db.String(1024))
+    de = db.Column(db.String(1024))
+
+
+class User(UserMixin, db.Model):
+    __tablename = 'users'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    username = db.Column(db.String(64), unique=True)
+    email = db.Column(db.String(128), unique=True)
+    password_hash = db.Column(db.String(128))
+
+    def __init__(self, username, email, password):
+        self.username = username
+        self.email = email
+        self.set_password(password)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+
+@login.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 # ------------ END DATABASE MODELS ---------------
 

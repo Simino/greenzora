@@ -1,9 +1,18 @@
-from flask import jsonify
+from flask import jsonify, redirect, url_for
 from server import db, server_app
-from server.models import Paper, ServerSetting
+from server.models import Paper, ServerSetting, User
+from flask_login import current_user, login_user
 
 
 # ----------------- ROUTES -----------------------
+
+@server_app.route('/login', method=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('/annotation'))
+    form = 'bla'
+    if form.validate_on_submit():
+        user = User.query.filter_ by(username=form.username.data).first()
 
 @server_app.route('/data/papers/<parameters>')
 def get_papers(parameters):

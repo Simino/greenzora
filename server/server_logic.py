@@ -88,9 +88,9 @@ class ServerLogic:
 
             self.db.session.merge(paper)
 
-            if is_debug():
-                print('Count: ' + str(index))
-                print(paper)
+            # if is_debug():
+                # print('Count: ' + str(index))
+                # print(paper)
 
         self.db.session.commit()
         OperationParameter.set('last_zora_pull', new_last_zora_pull)
@@ -112,9 +112,9 @@ class ServerLogic:
                 paper = Paper.create_or_update(paper_dict)
                 self.db.session.add(paper)
 
-            if is_debug():
-                print('Count: ' + str(index))
-                print(paper)
+            # if is_debug():
+                # print('Count: ' + str(index))
+                # print(paper)
         self.db.session.commit()
 
         print('Legacy annotations imported')

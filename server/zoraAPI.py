@@ -35,7 +35,9 @@ class ZoraAPI:
         # Get the relevant papers from ZORA and parse them
         record_list = []
         try:
+            print('Loading records from ZORA API...')
             record_list = self.client.listRecords(**args)
+            print('Done')
         except NoRecordsMatchError as error:
             print(error)
             print('No records were found')
@@ -73,6 +75,7 @@ class ZoraAPI:
     def parse_records(self, record_list):
         metadata_dict_list = []
         count = 0
+        print('Parsing records...')
         for record in record_list:
             metadata_dict = self.parse_record(record)
             if metadata_dict:
@@ -80,4 +83,5 @@ class ZoraAPI:
             count += 1
             if count >= 1000:
                 break
+        print('Done')
         return metadata_dict_list
