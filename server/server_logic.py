@@ -79,20 +79,17 @@ class ServerLogic:
         # Store the papers in the database and classify the paper
         # TODO: metadata_dict empty!
         for index, metadata_dict in enumerate(metadata_dict_list):
-            paper = Paper.create_or_update(metadata_dict)
+            title = metadata_dict['title'][0] if ('title' in metadata_dict and len(metadata_dict['title']) != 0) else ''
+            description = metadata_dict['description'][0] if ('description' in metadata_dict and len(metadata_dict['description']) != 0) else ''
+            data = pd.Series([title + ' | ' + description])
+            metadata_dict['sustainable'] = self.ml_tool.classify(data).item(0)
 
-            title = paper.title if paper.title else ''
-            description = paper.description if paper.description else ''
-            data = pd.Series(title + ' | ' + description)
-            paper.sustainable = self.ml_tool.classify(data).item(0)
-
-            self.db.session.merge(paper)
+            Paper.create_or_update(metadata_dict)
 
             # if is_debug():
                 # print('Count: ' + str(index))
                 # print(paper)
 
-        self.db.session.commit()
         OperationParameter.set('last_zora_pull', new_last_zora_pull)
 
     # TODO: Handle error cases (multiple db entries found, no entries found, etc.)

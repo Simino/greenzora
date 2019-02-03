@@ -38,8 +38,7 @@ class ZoraAPI:
             print('Loading records from ZORA API...')
             record_list = self.client.listRecords(**args)
             print('Done')
-        except NoRecordsMatchError as error:
-            print(error)
+        except NoRecordsMatchError:
             print('No records were found')
         finally:
             return record_list
@@ -81,7 +80,7 @@ class ZoraAPI:
             if metadata_dict:
                 metadata_dict_list.append(metadata_dict)
             count += 1
-            if count >= 1000:
+            if count >= 500:
                 break
         print('Done')
         return metadata_dict_list
