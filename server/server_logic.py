@@ -1,5 +1,5 @@
 from server.utils import is_debug
-from server.models import Paper, ServerSetting, OperationParameter
+from server.models import Paper, Institute, ResourceType, ServerSetting, OperationParameter
 from server.zoraAPI import ZoraAPI
 from server.ml_tool import MLTool
 from flask_sqlalchemy import event
@@ -9,6 +9,7 @@ import pandas as pd
 import json
 
 
+# TODO: import db and server_app instead of instantiating it
 class ServerLogic:
     ZORA_API_JOB_ID = 'zoraAPI_get_records_job'
 
@@ -20,10 +21,17 @@ class ServerLogic:
         # Initialize the ZORA API
         url = ServerSetting.get('zora_url')
         self.zoraAPI = ZoraAPI(url)
-
         print('ZORA API initialized')
 
-        # Import the annotations that are not stored in the database
+        # Load the institutes from ZORA
+        self.load_institutes()
+        print('Institutes loaded')
+
+        # Load the resource types from ZORA
+        self.load_resource_types()
+        print('Resource types loaded')
+
+        # Import the legacy annotations
         file_path = self.server_app.config['LEGACY_ANNOTATIONS_PATH']
         self.import_legacy_annotations(file_path)
 
@@ -76,27 +84,55 @@ class ServerLogic:
         from_ = OperationParameter.get('last_zora_pull')
         metadata_dict_list = self.zoraAPI.get_metadata_dicts(from_)
 
-        # Store the papers in the database and classify the paper
-        # TODO: metadata_dict empty!
-        for index, metadata_dict in enumerate(metadata_dict_list):
-            title = metadata_dict['title'][0] if ('title' in metadata_dict and len(metadata_dict['title']) != 0) else ''
-            description = metadata_dict['description'][0] if ('description' in metadata_dict and len(metadata_dict['description']) != 0) else ''
+        # If a paper was deleted, delete it from the database. Otherwise classify the paper and store it.
+        count = 0
+        for metadata_dict in metadata_dict_list:
+
+            # If the paper got deleted, we want to delete it as well
+            if 'deleted' in metadata_dict and metadata_dict['deleted']:
+                paper = self.db.session.query(Paper).get(metadata_dict['uid'])
+                if paper:
+                    self.db.session.delete(paper)
+                continue
+
+            # Classify the paper based on title and description
+            title = metadata_dict['title'] if 'title' in metadata_dict and metadata_dict['title'] else ''
+            description = metadata_dict['description'] if 'description' in metadata_dict and metadata_dict['description'] else ''
             data = pd.Series([title + ' | ' + description])
             metadata_dict['sustainable'] = self.ml_tool.classify(data).item(0)
 
+            # Create or update the paper. We use the no_autoflush feature to avoid
             Paper.create_or_update(metadata_dict)
 
-            # if is_debug():
-                # print('Count: ' + str(index))
+            if is_debug():
+                count += 1
+                if count % 100 == 0:
+                    print('Count: ' + str(count))
                 # print(paper)
 
+        # After the zora_pull is completed, we update the last_zora_pull operation parameter, so that we can only get
+        # the most recent changes of the ZORA repository. Then commit the transaction
         OperationParameter.set('last_zora_pull', new_last_zora_pull)
+        self.db.session.commit()
 
-    # TODO: Handle error cases (multiple db entries found, no entries found, etc.)
+        if is_debug():
+            print('Duration: ' + str(datetime.utcnow() - new_last_zora_pull))
+
     def import_legacy_annotations(self, file_path):
+
+        # Check if we already imported the legacy annotations
+        if OperationParameter.get('legacy_annotations_imported'):
+            print('Legacy annotations already imported')
+            return
+
+        # Load the legacy annotations from the json file defined in the config.py
         with open(file_path, 'rt') as file:
             paper_dict_list = json.load(file)
-        for index, paper_dict in enumerate(paper_dict_list):
+
+        # Import all legacy annotations
+        print('Importing legacy annotations...')
+        count = 0
+        for paper_dict in paper_dict_list:
 
             # Check if the paper already exists in the database. If it does, we only want to set the sustainable and
             # annotated values (since we can assume that the other existing values are more recent). Otherwise we
@@ -109,12 +145,40 @@ class ServerLogic:
                 paper = Paper.create_or_update(paper_dict)
                 self.db.session.add(paper)
 
-            # if is_debug():
-                # print('Count: ' + str(index))
-                # print(paper)
+            if is_debug():
+                count += 1
+                print('Count: ' + str(count))
+                print(paper)
+
+        # Update legacy_annotations_imported so we know we don't have to import them anymore on a server startup. Then
+        # commit the transaction.
+        OperationParameter.set('legacy_annotations_imported', True)
         self.db.session.commit()
 
         print('Legacy annotations imported')
+
+    # Loads the institutes from ZORA and stores them in the database
+    def load_institutes(self):
+        institute_name_dict = self.zoraAPI.get_institutes()
+        for institute_name, children_dict in institute_name_dict.items():
+            self.store_institute_hierarchy(institute_name, children_dict, None)
+        self.db.session.commit()
+
+    def store_institute_hierarchy(self, current_name, children_dict, parent):
+        current_institute = self.db.session.query(Institute).filter(Institute.name == current_name, Institute.parent == parent).first()
+        if not current_institute:
+            current_institute = Institute(current_name)
+            current_institute.parent = parent
+            self.db.session.add(current_institute)
+        if children_dict:
+            for child_name, child_children_dict in children_dict.items():
+                self.store_institute_hierarchy(child_name, child_children_dict, current_institute)
+
+    def load_resource_types(self):
+        resource_type_list = self.zoraAPI.get_resource_types()
+        for resource_type in resource_type_list:
+            ResourceType.get_or_create(resource_type)
+        self.db.session.commit()
 
     # This method handles changes to the settings.
     # zora_pull_interval:   Reschedules the zora_pull_job with the new interval
