@@ -1,10 +1,28 @@
-from flask import jsonify, redirect, url_for, flash
-from server import db, server_app
+from flask import jsonify, redirect, url_for, flash, render_template
+from server import db, server_app, utils
 from server.models import Paper, ServerSetting, User
 from flask_login import current_user, login_user, logout_user
-
+import sqlite3
+import jinja2
+import server.queryFactory as factory
 
 # ----------------- ROUTES -----------------------
+
+@server_app.route('/')
+@server_app.route('/index')
+def index():
+    rowsQuery= 'SELECT * FROM papers WHERE sustainable = 1'
+    rows = factory.query(factory.getCursor('database.db'),rowsQuery)
+    return render_template('list.html', rows=rows)
+
+
+@server_app.route('/form')
+def form():
+    creatorsQuery = 'SELECT * from creators'
+    creators = factory.query(factory.getCursor('database.db'), creatorsQuery)
+    return render_template('searchlist.html', creators= creators)
+
+
 
 @server_app.route('/login', methods=['GET', 'POST'])
 def login():
