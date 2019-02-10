@@ -38,8 +38,7 @@ class ZoraAPI:
             print('Loading records from ZORA API...')
             record_list = self.client.listRecords(**args)
             print('Done')
-        except NoRecordsMatchError as error:
-            print(error)
+        except NoRecordsMatchError:
             print('No records were found')
         finally:
             return record_list
