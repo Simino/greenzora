@@ -3,6 +3,7 @@ from oaipmh.metadata import MetadataRegistry, oai_dc_reader
 from oaipmh.error import NoRecordsMatchError
 from server import db
 from server.models import Institute, ResourceType
+from http.client import RemoteDisconnected
 import re
 
 
@@ -76,27 +77,36 @@ class ZoraAPI:
         record_list = []
         try:
             print('Loading records from ZORA API...')
-            record_list = self.client.listRecords(**args)
+            record_iterator = self.client.listRecords(**args)
+            record_list = []
+            count = 0
+            for record in record_iterator:
+                record_list.append(record)
+                count += 1
+                if count % 1000 == 0:
+                    print(str(count))
+                if count >= 30000:
+                    break
+            print(count)
             print('Done')
         except NoRecordsMatchError:
             print('No records were found')
+        except RemoteDisconnected as error:
+            # TODO: How to behave if disconnected? repeat? if yes, how many times and in what intervals?
+            # TODO: Test if this works as intended
+            print(error)
+        # TODO: Maybe we need to include 'except Exception:' to make this stuff more stable (the job will be restarted --> np)
         finally:
             return record_list
 
     # This method parses the a record from ZORA in a easier to use dictionary.
     def parse_records(self, record_list):
         metadata_dict_list = []
-        count = 0
         print('Parsing records...')
         for record in record_list:
             metadata_dict = self.parse_record(record)
             if metadata_dict:
                 metadata_dict_list.append(metadata_dict)
-            count += 1
-            if count % 100 == 0:
-                print(str(count))
-            # if count >= 3000:
-                # break
         print('Done')
         return metadata_dict_list
 

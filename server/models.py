@@ -89,7 +89,7 @@ class Paper(db.Model):
             date = dateutil.parser.parse(date_string, default=datetime(1970, 1, 1))
         except ValueError as error:
             # TODO: Remove print statement --> debug only
-            print(date_string + ': ' + error)
+            print(date_string + ': ' + str(error))
             date = None
 
         resource_type_list = metadata_dict['resource_types'] if 'resource_types' in metadata_dict else []

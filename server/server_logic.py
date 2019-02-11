@@ -104,9 +104,10 @@ class ServerLogic:
 
             if is_debug():
                 count += 1
-                if count % 100 == 0:
+                if count % 1000 == 0:
                     print('Count: ' + str(count))
                 # print(paper)
+        print(count)
 
         # After the zora_pull is completed, we update the last_zora_pull operation parameter, so that we can only get
         # the most recent changes of the ZORA repository. Then commit the transaction
