@@ -84,9 +84,14 @@ class Paper(db.Model):
         publisher = metadata_dict['publisher'] if 'publisher' in metadata_dict else None
         date_string = metadata_dict['date'] if 'date' in metadata_dict else None
 
-        # TODO: some dates are invalid (ex. 2009-11-31 --> we need to validate it)
+        # Zora has some fucked up dates (ex. 2009-11-31). If we encounter a invalid date, we set it to None.
+        try:
+            date = dateutil.parser.parse(date_string, default=datetime(1970, 1, 1))
+        except ValueError as error:
+            # TODO: Remove print statement --> debug only
+            print(date_string + ': ' + error)
+            date = None
 
-        date = dateutil.parser.parse(date_string, default=datetime(1970, 1, 1))
         resource_type_list = metadata_dict['resource_types'] if 'resource_types' in metadata_dict else []
         language = metadata_dict['language'] if 'language' in metadata_dict else None
         relation = metadata_dict['relation'] if 'relation' in metadata_dict else None
@@ -461,13 +466,6 @@ class Type(db.Model):
 
             # Booleans need to get casted.
             return bool(int(value))
-
-
-class Translation(db.Model):
-    __tablename__ = 'translations'
-    name = db.Column(db.String(256), primary_key=True)
-    eng = db.Column(db.String(1024))
-    de = db.Column(db.String(1024))
 
 
 class User(UserMixin, db.Model):

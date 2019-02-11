@@ -1,3 +1,4 @@
+from server import db, server_app
 from server.utils import is_debug
 from server.models import Paper, Institute, ResourceType, ServerSetting, OperationParameter
 from server.zoraAPI import ZoraAPI
@@ -9,14 +10,11 @@ import pandas as pd
 import json
 
 
-# TODO: import db and server_app instead of instantiating it
 class ServerLogic:
     ZORA_API_JOB_ID = 'zoraAPI_get_records_job'
 
     # Init stuff in __init__?
-    def __init__(self, server_app, db):
-        self.server_app = server_app
-        self.db = db
+    def __init__(self):
 
         # Initialize the ZORA API
         url = ServerSetting.get('zora_url')
@@ -32,15 +30,15 @@ class ServerLogic:
         print('Resource types loaded')
 
         # Import the legacy annotations
-        file_path = self.server_app.config['LEGACY_ANNOTATIONS_PATH']
+        file_path = server_app.config['LEGACY_ANNOTATIONS_PATH']
         self.import_legacy_annotations(file_path)
 
         # Initialize the machine learning tool
         self.ml_tool = MLTool()
 
         # Get the relevant papers needed for the training
-        training_data_set = pd.read_sql_query(self.db.session.query(Paper).filter(Paper.annotated == True).statement,
-                                              self.db.session.bind)
+        training_data_set = pd.read_sql_query(db.session.query(Paper).filter(Paper.annotated == True).statement,
+                                              db.session.bind)
 
         # Prepare the data that is needed for the training and train the classifier
         training_data_set['data'] = training_data_set["title"] + " | " + training_data_set["description"]
@@ -90,9 +88,9 @@ class ServerLogic:
 
             # If the paper got deleted, we want to delete it as well
             if 'deleted' in metadata_dict and metadata_dict['deleted']:
-                paper = self.db.session.query(Paper).get(metadata_dict['uid'])
+                paper = db.session.query(Paper).get(metadata_dict['uid'])
                 if paper:
-                    self.db.session.delete(paper)
+                    db.session.delete(paper)
                 continue
 
             # Classify the paper based on title and description
@@ -113,7 +111,7 @@ class ServerLogic:
         # After the zora_pull is completed, we update the last_zora_pull operation parameter, so that we can only get
         # the most recent changes of the ZORA repository. Then commit the transaction
         OperationParameter.set('last_zora_pull', new_last_zora_pull)
-        self.db.session.commit()
+        db.session.commit()
 
         if is_debug():
             print('Duration: ' + str(datetime.utcnow() - new_last_zora_pull))
@@ -137,13 +135,13 @@ class ServerLogic:
             # Check if the paper already exists in the database. If it does, we only want to set the sustainable and
             # annotated values (since we can assume that the other existing values are more recent). Otherwise we
             # create a new entry in the database.
-            paper = self.db.session.query(Paper).get(paper_dict['uid'])
+            paper = db.session.query(Paper).get(paper_dict['uid'])
             if paper:
                 paper.sustainable = paper_dict['sustainable']
                 paper.annotated = paper_dict['annotated']
             else:
                 paper = Paper.create_or_update(paper_dict)
-                self.db.session.add(paper)
+                db.session.add(paper)
 
             if is_debug():
                 count += 1
@@ -153,7 +151,7 @@ class ServerLogic:
         # Update legacy_annotations_imported so we know we don't have to import them anymore on a server startup. Then
         # commit the transaction.
         OperationParameter.set('legacy_annotations_imported', True)
-        self.db.session.commit()
+        db.session.commit()
 
         print('Legacy annotations imported')
 
@@ -162,14 +160,14 @@ class ServerLogic:
         institute_name_dict = self.zoraAPI.get_institutes()
         for institute_name, children_dict in institute_name_dict.items():
             self.store_institute_hierarchy(institute_name, children_dict, None)
-        self.db.session.commit()
+        db.session.commit()
 
     def store_institute_hierarchy(self, current_name, children_dict, parent):
-        current_institute = self.db.session.query(Institute).filter(Institute.name == current_name, Institute.parent == parent).first()
+        current_institute = db.session.query(Institute).filter(Institute.name == current_name, Institute.parent == parent).first()
         if not current_institute:
             current_institute = Institute(current_name)
             current_institute.parent = parent
-            self.db.session.add(current_institute)
+            db.session.add(current_institute)
         if children_dict:
             for child_name, child_children_dict in children_dict.items():
                 self.store_institute_hierarchy(child_name, child_children_dict, current_institute)
@@ -178,7 +176,7 @@ class ServerLogic:
         resource_type_list = self.zoraAPI.get_resource_types()
         for resource_type in resource_type_list:
             ResourceType.get_or_create(resource_type)
-        self.db.session.commit()
+        db.session.commit()
 
     # This method handles changes to the settings.
     # zora_pull_interval:   Reschedules the zora_pull_job with the new interval
@@ -206,8 +204,8 @@ class ServerLogic:
         self.ml_tool = MLTool()
 
         # Get the relevant papers needed for the training
-        training_data_set = pd.read_sql_query(self.db.session.query(Paper).filter(Paper.annotated == True).statement,
-                                              self.db.session.bind)
+        training_data_set = pd.read_sql_query(db.session.query(Paper).filter(Paper.annotated == True).statement,
+                                              db.session.bind)
 
         # Prepare the data that is needed for the training and train the classifier
         training_data_set['data'] = training_data_set["title"] + " | " + training_data_set["description"]
@@ -216,12 +214,12 @@ class ServerLogic:
         self.ml_tool.train_classifier(training_data, labels)
 
         # Update all classifications
-        data_set = pd.read_sql_query(self.db.session.query(Paper).filter(Paper.annotated == False).statement,
-                                     self.db.session.bind)
+        data_set = pd.read_sql_query(db.session.query(Paper).filter(Paper.annotated == False).statement,
+                                     db.session.bind)
         data_set['data'] = data_set["title"] + " | " + data_set["description"]
         data_set['label'] = self.ml_tool.classify(data_set.data)
 
         for index, row in data_set.iterrows():
-            paper = self.db.session.query(Paper).get(row['uid'])
+            paper = db.session.query(Paper).get(row['uid'])
             paper.sustainable = row['label']
-        self.db.session.commit()
+        db.session.commit()

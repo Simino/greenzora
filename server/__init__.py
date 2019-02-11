@@ -21,4 +21,4 @@ from server import models, server_logic, routes
 models.initialize_db()
 
 # Initialize the ZORA API, machine learning tool, task scheduler and zora pull job
-server_logic = server_logic.ServerLogic(server_app, db)
+server_logic = server_logic.ServerLogic()
