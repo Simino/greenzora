@@ -169,6 +169,10 @@ class Paper(db.Model):
         self.sustainable = sustainable
         self.annotated = True
 
+    @classmethod
+    def get_sustainable_papers_per_year(cls):
+        papers_per_year = db.session.query(func.strftime('%Y', cls.date), func.count(cls.uid)).filter(cls.sustainable == True).group_by(func.strftime('%Y', cls.date)).all()
+        return papers_per_year
 
 class Creator(db.Model):
     __tablename__ = 'creators'
