@@ -85,7 +85,7 @@ class ZoraAPI:
                 count += 1
                 if count % 1000 == 0:
                     print(str(count))
-                if count >= 30000:
+                if count >= 2000:
                     break
             print(count)
             print('Done')
@@ -95,7 +95,8 @@ class ZoraAPI:
             # TODO: How to behave if disconnected? repeat? if yes, how many times and in what intervals?
             # TODO: Test if this works as intended
             print(error)
-        # TODO: Maybe we need to include 'except Exception:' to make this stuff more stable (the job will be restarted --> np)
+        except Exception as error:
+            print(error)
         finally:
             return record_list
 
@@ -177,19 +178,3 @@ class ZoraAPI:
         metadata_dict['relation'] = metadata_dict['relation'][0] if 'relation' in metadata_dict and len(metadata_dict['relation']) > 0 else None
 
         return metadata_dict
-
-    # This function parses the a record from ZORA in a easier to use dictionary.
-    def parse_records(self, record_list):
-        metadata_dict_list = []
-        count = 0
-        print('Parsing records...')
-        for record in record_list:
-            metadata_dict = self.parse_record(record)
-            if metadata_dict:
-                metadata_dict_list.append(metadata_dict)
-            count += 1
-            if count >= 1000:
-                break
-        print('Done')
-        return metadata_dict_list
-
