@@ -176,6 +176,8 @@ class ZoraAPI:
         metadata_dict['language'] = metadata_dict['language'][0] if 'language' in metadata_dict and len(metadata_dict['language']) > 0 else None
         metadata_dict['relation'] = metadata_dict['relation'][0] if 'relation' in metadata_dict and len(metadata_dict['relation']) > 0 else None
 
+        return metadata_dict
+
     # This function parses the a record from ZORA in a easier to use dictionary.
     def parse_records(self, record_list):
         metadata_dict_list = []
