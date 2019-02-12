@@ -4,8 +4,10 @@ from server.models import Paper, Institute, ResourceType, ServerSetting, Operati
 from server.zoraAPI import ZoraAPI
 from server.ml_tool import MLTool
 from flask_sqlalchemy import event
+from sqlalchemy.sql import func
 from flask_apscheduler import APScheduler
 from datetime import datetime
+from threading import Timer
 import pandas as pd
 import json
 
@@ -15,6 +17,9 @@ class ServerLogic:
 
     # Init stuff in __init__?
     def __init__(self):
+
+        # Initialize the list of papers that are being annotated at the moment
+        self.annotations = []
 
         # Initialize the ZORA API
         url = ServerSetting.get('zora_url')
@@ -117,7 +122,8 @@ class ServerLogic:
         if is_debug():
             print('Duration: ' + str(datetime.utcnow() - new_last_zora_pull))
 
-    def import_legacy_annotations(self, file_path):
+    @staticmethod
+    def import_legacy_annotations(file_path):
 
         # Check if we already imported the legacy annotations
         if OperationParameter.get('legacy_annotations_imported'):
@@ -199,6 +205,29 @@ class ServerLogic:
         if is_debug():
             print('Setting "' + setting_name + '" was changed to ' + str(value) + '.')
 
+    def get_annotation(self):
+        paper = db.session.query(Paper).filter(Paper.annotated == False, Paper.uid.notin_(self.annotations)).order_by(func.random()).first()
+        self.annotations.append(paper.uid)
+        timer = Timer(10.0, self.timeout_annotation, [paper.uid])
+        timer.start()
+        return paper
+
+    def set_annotation(self, uid, sustainable):
+        if uid in self.annotations:
+            self.annotations.remove(uid)
+            paper = db.session.query(Paper).get(uid)
+            paper.sustainable = sustainable
+            paper.annotated = True
+            db.session.commit()
+            return 200
+        else:
+            return 408
+
+    def timeout_annotation(self, uid):
+        if uid in self.annotations:
+            self.annotations.remove(uid)
+
+    # TODO
     def create_new_model(self):
 
         # Reset the machine learning model

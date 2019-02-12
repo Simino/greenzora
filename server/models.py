@@ -88,8 +88,7 @@ class Paper(db.Model):
         try:
             date = dateutil.parser.parse(date_string, default=datetime(1970, 1, 1))
         except ValueError as error:
-            # TODO: Remove print statement --> debug only
-            print(date_string + ': ' + str(error))
+            print('Date "' + date_string + '" could not be parsed: ' + str(error))
             date = None
 
         resource_type_list = metadata_dict['resource_types'] if 'resource_types' in metadata_dict else []
@@ -165,14 +164,11 @@ class Paper(db.Model):
 
         return paper
 
-    def set_annotation(self, sustainable):
-        self.sustainable = sustainable
-        self.annotated = True
-
     @classmethod
     def get_sustainable_papers_per_year(cls):
         papers_per_year = db.session.query(func.strftime('%Y', cls.date), func.count(cls.uid)).filter(cls.sustainable == True).group_by(func.strftime('%Y', cls.date)).all()
         return papers_per_year
+
 
 class Creator(db.Model):
     __tablename__ = 'creators'
@@ -285,7 +281,6 @@ class Keyword(db.Model):
     def __init__(self, name):
         self.name = name
 
-    # TODO: We need to flush
     @classmethod
     def get_or_create(cls, name):
         keyword = db.session.query(cls).filter(cls.name == name).first()
