@@ -538,6 +538,8 @@ def initialize_default_settings():
     type_int = db.session.query(Type).get('int')
     db.session.add(ServerSetting(name='zora_url', value=server_app.config['DEFAULT_ZORA_URL'], type=type_string))
     db.session.add(ServerSetting(name='zora_pull_interval', value=server_app.config['DEFAULT_ZORA_PULL_INTERVAL'], type=type_int))
+    db.session.add(ServerSetting(name='resource_type_update_interval', value=server_app.config['DEFAULT_RESOURCE_TYPE_UPDATE_INTERVAL'], type=type_int))
+    db.session.add(ServerSetting(name='institute_update_interval', value=server_app.config['DEFAULT_INSTITUTE_UPDATE_INTERVAL'], type=type_int))
     db.session.commit()
 
 

@@ -14,6 +14,8 @@ import json
 
 class ServerLogic:
     ZORA_API_JOB_ID = 'zoraAPI_get_records_job'
+    INSTITUTE_UPDATE_JOB_ID = 'institute_update_job'
+    RESOURCE_TYPE_UPDATE_JOB_ID = 'resource_type_update_job'
 
     # Init stuff in __init__?
     def __init__(self):
@@ -55,8 +57,23 @@ class ServerLogic:
         self.scheduler = APScheduler()
         self.scheduler.init_app(server_app)
         self.scheduler.start()
-
         print('Task scheduler initialized')
+
+        # Initialize the institute update job, which updates the list of institutes
+        job_interval = ServerSetting.get('institute_update_interval')
+        server_app.apscheduler.add_job(func=self.load_institutes,
+                                       trigger='interval',
+                                       days=job_interval,
+                                       id=ServerLogic.INSTITUTE_UPDATE_JOB_ID)
+        print('Institute update job started')
+
+        # Initialize the resource_type update job, which updates the list of resource_types
+        job_interval = ServerSetting.get('resource_type_update_interval')
+        server_app.apscheduler.add_job(func=self.load_resource_types,
+                                       trigger='interval',
+                                       days=job_interval,
+                                       id=ServerLogic.RESOURCE_TYPE_UPDATE_JOB_ID)
+        print('Resource type update job started')
 
         # Initialize the zora pull job, that pulls data from the ZORA repository in a fixed interval
         job_interval = ServerSetting.get('zora_pull_interval')
@@ -65,14 +82,12 @@ class ServerLogic:
                                        days=job_interval,
                                        next_run_time=datetime.now(),
                                        id=ServerLogic.ZORA_API_JOB_ID)
-
         print('ZORA pull job started')
 
         # Register the database event listener for the server settings table
         @event.listens_for(ServerSetting.value, 'set')
         def handle_setting_change(target, value, oldvalue, initiator):
             self.handle_setting_change(target, value, oldvalue, initiator)
-
         print('Database event handler registered')
 
         print('Server initialized')
@@ -104,7 +119,7 @@ class ServerLogic:
             data = pd.Series([title + ' | ' + description])
             metadata_dict['sustainable'] = self.ml_tool.classify(data).item(0)
 
-            # Create or update the paper. We use the no_autoflush feature to avoid
+            # Create or update the paper
             Paper.create_or_update(metadata_dict)
 
             if is_debug():
