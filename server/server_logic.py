@@ -42,16 +42,7 @@ class ServerLogic:
 
         # Initialize the machine learning tool
         self.ml_tool = MLTool()
-
-        # Get the relevant papers needed for the training
-        training_data_set = pd.read_sql_query(db.session.query(Paper).filter(Paper.annotated == True).statement,
-                                              db.session.bind)
-
-        # Prepare the data that is needed for the training and train the classifier
-        training_data_set['data'] = training_data_set["title"] + " | " + training_data_set["description"]
-        training_data = training_data_set.data
-        labels = training_data_set.sustainable
-        self.ml_tool.train_classifier(training_data, labels)
+        self.train_ml_tool()
 
         # Initialize the task scheduler
         self.scheduler = APScheduler()
@@ -242,28 +233,41 @@ class ServerLogic:
         if uid in self.annotations:
             self.annotations.remove(uid)
 
+    def train_ml_tool(self):
+
+        # Get the relevant papers needed for the training
+        training_data_set = pd.read_sql_query(db.session.query(Paper).filter(Paper.annotated == True).statement,
+                                              db.session.bind)
+
+        # Prepare the data that is needed for the training
+        training_data = self.prepare_data(training_data_set)
+        labels = training_data_set.sustainable
+
+        # Train the classifier
+        self.ml_tool.train_classifier(training_data, labels)
+
+    @staticmethod
+    def prepare_data(dataframe: pd.DataFrame):
+        dataframe['title'].fillna('', inplace=True)
+        dataframe['description'].fillna('', inplace=True)
+        dataframe['data'] = dataframe["title"] + " | " + dataframe["description"]
+        return dataframe.data
+
     # TODO
     def create_new_model(self):
 
         # Reset the machine learning model
         self.ml_tool = MLTool()
 
-        # Get the relevant papers needed for the training
-        training_data_set = pd.read_sql_query(db.session.query(Paper).filter(Paper.annotated == True).statement,
-                                              db.session.bind)
+        self.train_ml_tool()
 
-        # Prepare the data that is needed for the training and train the classifier
-        training_data_set['data'] = training_data_set["title"] + " | " + training_data_set["description"]
-        training_data = training_data_set.data
-        labels = training_data_set.sustainable
-        self.ml_tool.train_classifier(training_data, labels)
-
-        # Update all classifications
+        # Prepare the data
         data_set = pd.read_sql_query(db.session.query(Paper).filter(Paper.annotated == False).statement,
                                      db.session.bind)
-        data_set['data'] = data_set["title"] + " | " + data_set["description"]
-        data_set['label'] = self.ml_tool.classify(data_set.data)
+        data = self.prepare_data(data_set)
+        data_set['label'] = self.ml_tool.classify(data)
 
+        # Update all classifications
         for index, row in data_set.iterrows():
             paper = db.session.query(Paper).get(row['uid'])
             paper.sustainable = row['label']

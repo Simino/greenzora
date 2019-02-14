@@ -85,8 +85,9 @@ class ZoraAPI:
                 count += 1
                 if count % 1000 == 0:
                     print(str(count))
-                if count >= 2000:
-                    break
+                # TODO: Remove
+                #if count >= 2000:
+                    #break
             print(count)
             print('Done')
         except NoRecordsMatchError:
