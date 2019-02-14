@@ -1,5 +1,5 @@
-from flask import jsonify, redirect, url_for, flash, render_template
-from server import db, server_app, utils
+from flask import jsonify, redirect, url_for, flash, render_template, request
+from server import db, server_app, models
 from server.models import Paper, ServerSetting, User
 from flask_login import current_user, login_user, logout_user
 import sqlite3
@@ -11,17 +11,37 @@ import server.queryFactory as factory
 @server_app.route('/')
 @server_app.route('/index')
 def index():
+    alcrows = db.session.query(Paper).filter(Paper.sustainable== True).all()
     rowsQuery= 'SELECT * FROM papers WHERE sustainable = 1'
     rows = factory.query(factory.getCursor('database.db'),rowsQuery)
-    return render_template('list.html', rows=rows)
+    return render_template('list.html', rows= alcrows)
 
 
 @server_app.route('/form')
 def form():
-    creatorsQuery = 'SELECT * from creators'
-    creators = factory.query(factory.getCursor('database.db'), creatorsQuery)
-    return render_template('searchlist.html', creators= creators)
+    all_sustainable_papers = db.session.query(Paper).filter(Paper.sustainable == True).all()
 
+    all_sustainable_paper_creators = db.session.query(models.PaperCreator).filter(models.PaperCreator.paper_uid.in_([paper.uid for paper in all_sustainable_papers])).all()
+    creators = db.session.query(models.Creator).filter(models.Creator.id.in_([c.creator_id for c in all_sustainable_paper_creators])).all()
+
+    all_sustainable_paper_keywords = db.session.query(models.PaperKeyword).filter(models.PaperKeyword.paper_uid.in_([paper.uid for paper in all_sustainable_papers])).all()
+    keywords = db.session.query(models.Keyword).filter(models.Keyword.id.in_([k.keyword_id for k in all_sustainable_paper_keywords])).all()
+
+    return render_template('searchlist.html', creators=creators, keywords=keywords)
+
+
+@server_app.route('/results', methods=['GET', 'POST'])
+def results():
+    if'creator_select' in request.form:
+        creator_select = request.form['creator_select']
+        print('creator_select selected')
+        print(request.form)
+    paperCreators = db.session.query(models.PaperCreator).filter(models.PaperCreator.creator_id == creator_select).all()
+    papers = db.session.query(Paper).filter(Paper.uid.in_([p.paper_uid for p in paperCreators])).filter(Paper.sustainable == True).all()
+
+    paperKeywords = db.session.query(models.PaperKeyword).filter(models.PaperKeyword.)
+    keywords = db.session.query(models.Keyword.name).filter(models.Keyword.id.in_([k.keyword_id for k in paperKeywords]))
+    return render_template('results.html', papers=papers)
 
 
 @server_app.route('/login', methods=['GET', 'POST'])

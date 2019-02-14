@@ -9,17 +9,13 @@
         <thead>
             <td>UID</td>
             <td>Title</td>
-            <td>Creators</td>
-            <td>Subjects</td>
-            <td>Keywords</td>
+            <td>Sustainable</td>
         </thead>
             {% for row in rows %}
             <tr>
-                <td>{{row[0]}}</td>
-                <td>{{row[1]}}</td>
-                <td>{{row[2]}}</td>
-                <td>{{row[3]}}</td>
-                <td>{{row[4]}}</td>
+                <td>{{row['uid']}}</td>
+                <td>{{row['title']}}</td>
+                <td>{{row['sustainable']}}</td>
             </tr>
             {% endfor %}
     </table>

@@ -5,12 +5,19 @@
     <title>searchlist</title>
 </head>
 <body>
-    <form>
-        <select>
+    <form name="select" action="results" method="POST">
+        <select name="creator_select" >
+            <option selected label=""></option>
             {% for creator in creators %}
-            <option>{{creator[1]}}</option>
+            <option value="{{creator['id']}}">{{creator['last_name']}} {{creator['first_name']}}</option>
             {% endfor %}
         </select>
+        <select name="keyword_select">
+            {% for keyword in keywords %}
+            <option value="{{keyword['id']}}">{{keyword['name']}} </option>
+            {% endfor %}
+        </select>
+        <button type="submit">Submit!</button>
     </form>
 </body>
 </html>

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>results</title>
+</head>
+<body>
+    <table border=1>
+        <thead>
+            <td>uid</td>
+            <td>title</td>
+            <td>sustainable</td>
+            <td>keywords</td>
+        </thead>
+            {% for paper in papers %}
+            <tr>
+                <td>{{paper['uid']}}</td>
+                <td>{{paper['title']}}</td>
+                <td>{{paper['sustainable']}}</td>
+                <td>{{paper['keywords']}}</td>
+            </tr>
+            {% endfor %}
+    </table>
+</body>
+</html>
