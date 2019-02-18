@@ -5,7 +5,7 @@
     <title>searchlist</title>
 </head>
 <body>
-    <form name="select" action="results" method="POST">
+    <form name="select" action="sresults" method="POST">
         <select name="creator_select" >
             <option selected label=""></option>
             {% for creator in creators %}
@@ -13,8 +13,14 @@
             {% endfor %}
         </select>
         <select name="keyword_select">
+            <option selected label=""></option>
             {% for keyword in keywords %}
             <option value="{{keyword['id']}}">{{keyword['name']}} </option>
+            {% endfor %}
+        </select>
+        <select name="language_select">
+            {% for language in languages %}
+            <option value="{{language['id']}}"> {{language['name']}}</option>
             {% endfor %}
         </select>
         <button type="submit">Submit!</button>
