@@ -31,7 +31,9 @@ def form():
     keywords = db.session.query(models.Keyword).filter(models.Keyword.id.in_([k.keyword_id for k in all_sustainable_paper_keywords])).all()
 
     languages = db.session.query(models.Language)
-    return render_template('searchlist.html', creators=creators, keywords=keywords, languages=languages)
+
+    ddcs = db.session.query(models.DDC)
+    return render_template('searchlist.html', creators=creators, keywords=keywords, languages=languages, ddcs=ddcs)
 
 
 @server_app.route('/results', methods=['GET', 'POST'])
@@ -42,7 +44,6 @@ def results():
         print(request.form)
     papers = db.session.query(Paper).filter(Paper.creators.id == creator_select)
 
-    keywords = papers.keywords
 
     paperCreators = db.session.query(models.PaperCreator).filter(models.PaperCreator.creator_id == creator_select).all()
     papers = db.session.query(Paper).filter(Paper.uid.in_([p.paper_uid for p in paperCreators])).filter(Paper.sustainable == True).all()
@@ -57,6 +58,10 @@ def sresults():
     filter_criteria = dict([('title', 'search'), ('creator', 'drop'), ('description', 'search'), ('date', 'range'), ('language', 'drop'), ('ddc', 'drop'), ('keyword', 'drop')])
     matching_papers = db.session.query(Paper).filter(Paper.sustainable == True)
     if request.method == 'POST':
+        if 'title_select' in request.form:
+            if not request.form['title_select'] == '':
+                title_select = request.form['title_select']
+                matching_papers = matching_papers.filter(Paper.title.contains(title_select))
         if 'creator_select' in request.form:
             if not request.form['creator_select'] == '':
                 creator_select = request.form['creator_select']
@@ -72,9 +77,14 @@ def sresults():
         if 'language_select' in request.form:
             if not request.form['language_select'] == '':
                 language_select = request.form['language_select']
-                print("language id is")
-                print(language_select)
-                matching_papers.filter(Paper.language_id == language_select)
+                matching_papers = matching_papers.filter(Paper.language_id == language_select)
+        if 'ddc_select' in request.form:
+            if not request.form['ddc_select'] == '':
+                ddc_select = request.form['ddc_select']
+                paperddcs = db.session.query(models.PaperDDC).filter(
+                    models.PaperDDC.ddc_dewey_number == ddc_select).all()
+                matching_papers = matching_papers.filter(Paper.uid.in_([p.paper_uid for p in paperddcs]))
+    matching_papers = matching_papers.all()
     return render_template('results.html', papers=matching_papers)
 
 
