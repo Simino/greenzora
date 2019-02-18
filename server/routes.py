@@ -11,14 +11,17 @@ import server.queryFactory as factory
 @server_app.route('/')
 @server_app.route('/index')
 def index():
-    alcrows = db.session.query(Paper).filter(Paper.sustainable== True).all()
-    rowsQuery= 'SELECT * FROM papers WHERE sustainable = 1'
-    rows = factory.query(factory.getCursor('database.db'),rowsQuery)
-    return render_template('list.html', rows= alcrows)
+    all_sustainable = db.session.query(Paper).filter(Paper.sustainable== True).all()
 
+    allp = db.session.query(Paper)
+
+    alt_sust = allp.filter(Paper.sustainable == True).all()
+
+    return render_template('start.html', rows=alt_sust)
 
 @server_app.route('/form')
 def form():
+
     all_sustainable_papers = db.session.query(Paper).filter(Paper.sustainable == True).all()
 
     all_sustainable_paper_creators = db.session.query(models.PaperCreator).filter(models.PaperCreator.paper_uid.in_([paper.uid for paper in all_sustainable_papers])).all()
@@ -27,7 +30,8 @@ def form():
     all_sustainable_paper_keywords = db.session.query(models.PaperKeyword).filter(models.PaperKeyword.paper_uid.in_([paper.uid for paper in all_sustainable_papers])).all()
     keywords = db.session.query(models.Keyword).filter(models.Keyword.id.in_([k.keyword_id for k in all_sustainable_paper_keywords])).all()
 
-    return render_template('searchlist.html', creators=creators, keywords=keywords)
+    languages = db.session.query(models.Language)
+    return render_template('searchlist.html', creators=creators, keywords=keywords, languages=languages)
 
 
 @server_app.route('/results', methods=['GET', 'POST'])
@@ -36,12 +40,42 @@ def results():
         creator_select = request.form['creator_select']
         print('creator_select selected')
         print(request.form)
+    papers = db.session.query(Paper).filter(Paper.creators.id == creator_select)
+
+    keywords = papers.keywords
+
     paperCreators = db.session.query(models.PaperCreator).filter(models.PaperCreator.creator_id == creator_select).all()
     papers = db.session.query(Paper).filter(Paper.uid.in_([p.paper_uid for p in paperCreators])).filter(Paper.sustainable == True).all()
 
-    paperKeywords = db.session.query(models.PaperKeyword).filter(models.PaperKeyword.)
-    keywords = db.session.query(models.Keyword.name).filter(models.Keyword.id.in_([k.keyword_id for k in paperKeywords]))
-    return render_template('results.html', papers=papers)
+    paperKeywords = db.session.query(models.PaperKeyword).filter(models.PaperKeyword.paper_uid.in_([p.uid for p in papers]))
+    keywords = db.session.query(models.Keyword).filter(models.Keyword.id.in_([k.keyword_id for k in paperKeywords]))
+    return render_template('results.html', papers=papers, keywords=keywords)
+
+
+@server_app.route('/sresults', methods=['GET', 'POST'])
+def sresults():
+    filter_criteria = dict([('title', 'search'), ('creator', 'drop'), ('description', 'search'), ('date', 'range'), ('language', 'drop'), ('ddc', 'drop'), ('keyword', 'drop')])
+    matching_papers = db.session.query(Paper).filter(Paper.sustainable == True)
+    if request.method == 'POST':
+        if 'creator_select' in request.form:
+            if not request.form['creator_select'] == '':
+                creator_select = request.form['creator_select']
+                paperCreators = db.session.query(models.PaperCreator).filter(
+                    models.PaperCreator.creator_id == creator_select).all()
+                matching_papers = matching_papers.filter(Paper.uid.in_([p.paper_uid for p in paperCreators]))
+        if 'keyword_select' in request.form:
+            if not request.form['keyword_select'] == '':
+                keyword_select = request.form['keyword_select']
+                paperKeywords = db.session.query(models.PaperKeyword).filter(
+                    models.PaperKeyword.keyword_id == keyword_select).all()
+                matching_papers = matching_papers.filter(Paper.uid.in_([p.paper_uid for p in paperKeywords]))
+        if 'language_select' in request.form:
+            if not request.form['language_select'] == '':
+                language_select = request.form['language_select']
+                print("language id is")
+                print(language_select)
+                matching_papers.filter(Paper.language_id == language_select)
+    return render_template('results.html', papers=matching_papers)
 
 
 @server_app.route('/login', methods=['GET', 'POST'])
