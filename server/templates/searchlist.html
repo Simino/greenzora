@@ -5,12 +5,34 @@
     <title>searchlist</title>
 </head>
 <body>
-    <form>
-        <select>
-            {% for creator in creators %}
-            <option>{{creator[1]}}</option>
+    <form name="select" action="sresults" method="POST">
+        Title: <input name="title_select" type="text">
+        DDC: <select name="ddc_select">
+            <option selected label=""></option>
+            {% for ddc in ddcs %}
+            <option value="{{ddc['dewey_number']}}">{{ddc['name']}}</option>
             {% endfor %}
         </select>
+        Creator: <select name="creator_select" >
+            <option selected label=""></option>
+            {% for creator in creators %}
+            <option value="{{creator['id']}}">{{creator['last_name']}} {{creator['first_name']}}</option>
+            {% endfor %}
+        </select>
+        Keyword: <select name="keyword_select">
+            <option selected label=""></option>
+            {% for keyword in keywords %}
+            <option value="{{keyword['id']}}">{{keyword['name']}} </option>
+            {% endfor %}
+        </select>
+        Language: <select name="language_select">
+            <option selected label=""></option>
+            {% for language in languages %}
+            <option value="{{language['id']}}"> {{language['name']}}</option>
+            {% endfor %}
+        </select>
+        <input id="date_slider" type="range" min="1950" max="2020">
+        <button type="submit">Submit!</button>
     </form>
 </body>
 </html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>results</title>
+</head>
+<body>
+    <table border=1>
+        <thead>
+            <td>uid</td>
+            <td>title</td>
+            <td>sustainable</td>
+            <td>creators</td>
+            <td>language</td>
+        </thead>
+            {% for paper in papers %}
+            <tr>
+                <td>{{paper['uid']}}</td>
+                <td>{{paper['title']}}</td>
+                <td>{{paper['sustainable']}}</td>
+                <td>
+                    {% for creator in paper['creators'] %}
+                    {{creator['last_name']}} {{creator['first_name']}},
+                    {% endfor %}
+                </td>
+                <td>{{paper['language']['name']}}</td>
+            </tr>
+            {% endfor %}
+    </table>
+</body>
+</html>
