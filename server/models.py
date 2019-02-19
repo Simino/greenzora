@@ -37,7 +37,7 @@ class Paper(db.Model):
     description = db.Column(db.Text())
     publisher_id = db.Column(db.Integer, db.ForeignKey('publishers.id'))
     publisher = db.relationship('Publisher')
-    date = db.Column(db.DateTime)
+    date = db.Column(db.Date)
     resource_types = db.relationship('ResourceType', secondary='paper_resource_type_association_table')
     language_id = db.Column(db.Integer, db.ForeignKey('languages.id'))
     language = db.relationship('Language')
@@ -86,10 +86,11 @@ class Paper(db.Model):
 
         # Zora has some fucked up dates (ex. 2009-11-31). If we encounter a invalid date, we set it to None.
         try:
-            date = dateutil.parser.parse(date_string, default=datetime(1970, 1, 1))
+            publish_date = dateutil.parser.parse(date_string, default=datetime(1970, 1, 1)).date()
         except ValueError as error:
+            # TODO: Remove (debug only)
             print('Date "' + date_string + '" could not be parsed: ' + str(error))
-            date = None
+            publish_date = None
 
         resource_type_list = metadata_dict['resource_types'] if 'resource_types' in metadata_dict else []
         language = metadata_dict['language'] if 'language' in metadata_dict else None
@@ -152,7 +153,7 @@ class Paper(db.Model):
                     keywords=keywords,
                     description=description,
                     publisher=publisher,
-                    date=date,
+                    date=publish_date,
                     resource_types=resource_types,
                     language=language,
                     relation=relation,

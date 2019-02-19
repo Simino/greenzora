@@ -95,6 +95,7 @@ class ServerLogic:
 
         # If a paper was deleted, delete it from the database. Otherwise classify the paper and store it.
         count = 0
+        print('Storing papers...')
         for metadata_dict in metadata_dict_list:
 
             # If the paper got deleted, we want to delete it as well
@@ -119,6 +120,7 @@ class ServerLogic:
                     print('Count: ' + str(count))
                 # print(paper)
         print(count)
+        print('Done')
 
         # After the zora_pull is completed, we update the last_zora_pull operation parameter, so that we can only get
         # the most recent changes of the ZORA repository. Then commit the transaction
