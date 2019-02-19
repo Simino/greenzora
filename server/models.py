@@ -4,6 +4,13 @@ import dateutil.parser
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.sql import func
 from flask_login import UserMixin
+from matplotlib import pyplot
+import mpld3
+
+# Set the default font for the papers per year plot
+pyplot.rcParams['font.sans-serif'] = "Arial"
+pyplot.rcParams['font.family'] = "sans-serif"
+
 
 
 # TODO: Fix column types (string length!) + properties (nullable, etc.)
@@ -167,8 +174,24 @@ class Paper(db.Model):
 
     @classmethod
     def get_sustainable_papers_per_year(cls):
-        papers_per_year = db.session.query(func.strftime('%Y', cls.date), func.count(cls.uid)).filter(cls.sustainable == True).group_by(func.strftime('%Y', cls.date)).all()
-        return papers_per_year
+        papers_per_year = db.session.query(func.strftime('%Y', cls.date), func.count(cls.uid)).filter(cls.sustainable == True).group_by(func.strftime('%Y', cls.date)).order_by(cls.date).all()
+        years = []
+        counts = []
+        current_year = papers_per_year[0][0]
+        for item in papers_per_year:
+            while current_year != item[0]:
+                years.append(current_year)
+                counts.append(0)
+                current_year = str(int(current_year) + 1)
+            years.append(item[0])
+            counts.append(item[1])
+            current_year = str(int(current_year) + 1)
+        fig, ax = pyplot.subplots()
+        ax.plot(years, counts, color='#0028a5')
+        ax.set_xticks(years[::5])
+        ax.set_xticklabels(years[::5])
+        html_plot = mpld3.fig_to_html(fig)
+        return html_plot
 
 
 class Creator(db.Model):
