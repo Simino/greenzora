@@ -1,19 +1,18 @@
-from server import server_app, db, login
-from datetime import datetime
 import dateutil.parser
-from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy.sql import func
-from flask_login import UserMixin
-from matplotlib import pyplot
 import mpld3
+
+from matplotlib import pyplot
+from datetime import datetime
+from flask_login import UserMixin
+from sqlalchemy.sql import func
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from greenzora import server_app, db, login
+from greenzora.utils import is_debug
 
 # Set the default font for the papers per year plot
 pyplot.rcParams['font.sans-serif'] = "Arial"
 pyplot.rcParams['font.family'] = "sans-serif"
-
-
-
-# TODO: Fix column types (string length!) + properties (nullable, etc.)
 
 
 # ------------ DATABASE MODELS ---------------
@@ -52,9 +51,7 @@ class Paper(db.Model):
     sustainable = db.Column(db.Boolean)
     annotated = db.Column(db.Boolean, default=False)
 
-    # TODO: Check if this is easier to do somehow
-    # Method that defines how an object of this class is printed. Useful for debugging.
-    # If no value is set, print 'NULL'
+    # Method that defines how an object of this class is printed. If no value is set, print 'NULL'.
     def __repr__(self):
         output = 'uid: ' + self.uid + '\n'
         output += 'title: ' + (self.title if self.title is not None else 'NULL') + '\n'
@@ -91,12 +88,12 @@ class Paper(db.Model):
         publisher = metadata_dict['publisher'] if 'publisher' in metadata_dict else None
         date_string = metadata_dict['date'] if 'date' in metadata_dict else None
 
-        # Zora has some fucked up dates (ex. 2009-11-31). If we encounter a invalid date, we set it to None.
+        # Zora has some invalid up dates (ex. 2009-11-31). If we encounter a invalid date, we set it to None.
         try:
             publish_date = dateutil.parser.parse(date_string, default=datetime(1970, 1, 1)).date()
         except ValueError as error:
-            # TODO: Remove (debug only)
-            print('Date "' + date_string + '" could not be parsed: ' + str(error))
+            if is_debug():
+                print('Date "' + date_string + '" could not be parsed: ' + str(error))
             publish_date = None
 
         resource_type_list = metadata_dict['resource_types'] if 'resource_types' in metadata_dict else []
@@ -104,8 +101,6 @@ class Paper(db.Model):
         relation = metadata_dict['relation'] if 'relation' in metadata_dict else None
         sustainable = metadata_dict['sustainable'] if 'sustainable' in metadata_dict else None
         annotated = metadata_dict['annotated'] if 'annotated' in metadata_dict else False
-
-        # Create or merge the relational objects.
 
         # Create creators if they don't exist
         creators = []
@@ -172,6 +167,7 @@ class Paper(db.Model):
 
         return paper
 
+    # Creates a html plot of how many sustainable papers were published each year
     @classmethod
     def get_sustainable_papers_per_year(cls):
         papers_per_year = db.session.query(func.strftime('%Y', cls.date), func.count(cls.uid)).filter(cls.sustainable == True).group_by(func.strftime('%Y', cls.date)).order_by(cls.date).all()
@@ -194,6 +190,9 @@ class Paper(db.Model):
         return html_plot
 
 
+# The Creator table stores all authors of the papers. Since we only get strings from ZORA, we only ever have ONE
+# instance of a specific person (first_name, last_name). This means that even if there are 2 Hans Muster, we see those
+# as one person.
 class Creator(db.Model):
     __tablename__ = 'creators'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -205,6 +204,7 @@ class Creator(db.Model):
         self.first_name = first_name
         self.last_name = last_name
 
+    # If a specific creator exists, return it. Otherwise create it.
     @classmethod
     def get_or_create(cls, first_name, last_name):
         creator = db.session.query(cls).filter(cls.first_name == first_name, cls.last_name == last_name).first()
@@ -213,12 +213,14 @@ class Creator(db.Model):
             db.session.add(creator)
         return creator
 
+    # Returns a list of the top 10 creators of sustainable papers based on how many publications they made
     @classmethod
     def get_top10_authors(cls):
         author_list = db.session.query(cls.first_name, cls.last_name, func.count(cls.id).label('count')).join(Paper, Creator.papers).filter(Paper.sustainable == True).group_by(cls.id).order_by('count DESC').limit(10).all()
         return author_list
 
 
+# Relational table that stores the association information between Paper(s) and Creator(s)
 class PaperCreator(db.Model):
     __tablename__ = 'paper_creator_association_table'
     id = db.Column(db.Integer, primary_key=True)
@@ -228,6 +230,8 @@ class PaperCreator(db.Model):
     creator = db.relationship(Creator, backref=db.backref('paper_creator_association_table', cascade='all, delete-orphan'))
 
 
+# The Institute table stores all institutes of the university of zurich. The institutes have a property children/parent
+# that contains all child/parent institutes.
 class Institute(db.Model):
     __tablename__ = 'institutes'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -239,6 +243,7 @@ class Institute(db.Model):
     def __init__(self, name):
         self.name = name
 
+    # If a specific creator exists, return it. Otherwise create it.
     @classmethod
     def get_or_create(cls, name):
         institute = db.session.query(cls).filter(cls.name == name).first()
@@ -247,12 +252,14 @@ class Institute(db.Model):
             db.session.add(institute)
         return institute
 
+    # Returns a list of the top 10 institutes based on how many sustainable papers were published from that institute
     @classmethod
     def get_top10_institutes(cls):
         institute_list = db.session.query(cls.name, func.count(cls.id).label('count')).join(Paper, Institute.papers).filter(Paper.sustainable == True).group_by(cls.id).order_by('count DESC').limit(10).all()
         return institute_list
 
 
+# Relational table that stores the association information between Paper(s) and Institute(s)
 class PaperInstitute(db.Model):
     __tablename__ = 'paper_institute_association_table'
     id = db.Column(db.Integer, primary_key=True)
@@ -262,7 +269,8 @@ class PaperInstitute(db.Model):
     institute = db.relationship(Institute, backref=db.backref('paper_institute_association_table', cascade='all, delete-orphan'))
 
 
-# Dewey Decimal Classifications
+# The Dewey Decimal Classifications table stores the different DDCs that were used in the papers. A DDC consists of a
+# dewey_number and a name (ex. '000 Computer science, innformation & general works')
 class DDC(db.Model):
     __tablename__ = 'ddcs'
     dewey_number = db.Column(db.Integer, primary_key=True)
@@ -273,6 +281,7 @@ class DDC(db.Model):
         self.dewey_number = dewey_number
         self.name = name
 
+    # If a specific creator exists, return it. Otherwise create it.
     @classmethod
     def get_or_create(cls, dewey_number, name):
         ddc = db.session.query(cls).get(dewey_number)
@@ -281,12 +290,14 @@ class DDC(db.Model):
             db.session.add(ddc)
         return ddc
 
+    # Returns the top 10 ddcs based on how many sustainable papers got published in that area
     @classmethod
     def get_top10_ddcs(cls):
         ddc_list = db.session.query(cls.dewey_number, cls.name, func.count(cls.id).label('count')).join(Paper, DDC.papers).filter(Paper.sustainable == True).group_by(cls.id).order_by('count DESC').limit(10).all()
         return ddc_list
 
 
+# Relational table that stores the association information between Paper(s) and DDC(s)
 class PaperDDC(db.Model):
     __tablename__ = 'paper_ddc_association_table'
     id = db.Column(db.Integer, primary_key=True)
@@ -296,6 +307,8 @@ class PaperDDC(db.Model):
     ddc = db.relationship(DDC, backref=db.backref('paper_ddc_association_table', cascade='all, delete-orphan'))
 
 
+# The Keyword table contains all keywords that are used in the papers.
+# NOTE: Some keywords that ZORA provides are not comma separated. Those will be stored as one single expression.
 class Keyword(db.Model):
     __tablename__ = 'keywords'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -305,6 +318,7 @@ class Keyword(db.Model):
     def __init__(self, name):
         self.name = name
 
+    # If a specific creator exists, return it. Otherwise create it.
     @classmethod
     def get_or_create(cls, name):
         keyword = db.session.query(cls).filter(cls.name == name).first()
@@ -313,12 +327,14 @@ class Keyword(db.Model):
             db.session.add(keyword)
         return keyword
 
+    # Returns the top 10 keywords that were used in sustainable papers
     @classmethod
     def get_top10_keywords(cls):
         keyword_list = db.session.query(cls.name, func.count(cls.id).label('count')).join(Paper, Keyword.papers).filter(Paper.sustainable == True).group_by(cls.id).order_by('count DESC').limit(10).all()
         return keyword_list
 
 
+# Relational table that stores the association information between Paper(s) and Keyword(s)
 class PaperKeyword(db.Model):
     __tablename__ = 'paper_keyword_association_table'
     id = db.Column(db.Integer, primary_key=True)
@@ -328,6 +344,7 @@ class PaperKeyword(db.Model):
     keyword = db.relationship(Keyword, backref=db.backref('paper_keyword_association_table', cascade='all, delete-orphan'))
 
 
+# The Publisher table stores all publishers of the papers
 class Publisher(db.Model):
     __tablename__ = 'publishers'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -336,6 +353,7 @@ class Publisher(db.Model):
     def __init__(self, name):
         self.name = name
 
+    # If a specific creator exists, return it. Otherwise create it.
     @classmethod
     def get_or_create(cls, name):
         publisher = db.session.query(cls).filter(cls.name == name).first()
@@ -345,6 +363,7 @@ class Publisher(db.Model):
         return publisher
 
 
+# The ResourceType table stores all the different types that the papers can be (Journal, Paper, etc.)
 class ResourceType(db.Model):
     __tablename__ = 'resource_types'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -354,6 +373,7 @@ class ResourceType(db.Model):
     def __init__(self, name):
         self.name = name
 
+    # If a specific creator exists, return it. Otherwise create it.
     @classmethod
     def get_or_create(cls, name):
         resource_type = db.session.query(cls).filter(cls.name == name).first()
@@ -363,6 +383,7 @@ class ResourceType(db.Model):
         return resource_type
 
 
+# Relational table that stores the association information between Paper(s) and ResourceType(s)
 class PaperResourceType(db.Model):
     __tablename__ = 'paper_resource_type_association_table'
     id = db.Column(db.Integer, primary_key=True)
@@ -372,6 +393,7 @@ class PaperResourceType(db.Model):
     resource_type = db.relationship(ResourceType, backref=db.backref('paper_resource_type_association_table', cascade='all, delete-orphan'))
 
 
+# The Language table stores the languages in which the papers are written
 class Language(db.Model):
     __tablename__ = 'languages'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -380,6 +402,7 @@ class Language(db.Model):
     def __init__(self, name):
         self.name = name
 
+    # If a specific creator exists, return it. Otherwise create it.
     @classmethod
     def get_or_create(cls, name):
         language = db.session.query(cls).filter(cls.name == name).first()
@@ -389,9 +412,12 @@ class Language(db.Model):
         return language
 
 
-# Stores the different settings of the server.
-# zora_url:             The base URL for requests to the zora API (string)
-# zora_pull_interval:   The amount of days between different ZORA repository pulls (int)
+# The ServerSetting table stores the different settings of the GreenZora server that can be changed manually:
+# annotation_timeout:               The annotation timeout in minutes (int)
+# institute_update_interval:        The interval in days after which the institutes should be updated (int)
+# resource_type_update_interval:    The interval in days after which the resource types should be updated (int)
+# zora_url:                         The base URL for requests to the zora API (string)
+# zora_pull_interval:               The amount of days between different ZORA repository pulls (int)
 class ServerSetting(db.Model):
     __tablename__ = 'settings'
     name = db.Column(db.String(64), primary_key=True)                     # The name of the setting
@@ -403,7 +429,7 @@ class ServerSetting(db.Model):
     def __repr__(self):
         return self.name + ': ' + self.value
 
-    # Gets the value of a specific ServerSetting with the correct type
+    # Gets the value of a specific ServerSetting parsed to the correct type
     @classmethod
     def get(cls, name):
         server_setting = db.session.query(cls).get(name)
@@ -421,9 +447,10 @@ class ServerSetting(db.Model):
         return server_setting
 
 
-# Stores server parameters.
-# last_zora_pull:       Timestamp of the date, when the server did the last pull from ZORA (datetime)
-# zora_pull_interval:   The time in days between different pull requests from the ZORA repository (int)
+# The OperationParameter table stores the operation parameters of the GreenZora server:
+# database_initialized:         Flag that indicates whether the database is already initialized or not (bool)
+# last_zora_pull:               Timestamp of the date, when the last pull from ZORA was done (datetime)
+# legacy_annotations_imported:  Flag that indicates whether the legacy annotations are already initialized or not (bool)
 class OperationParameter(db.Model):
     __tablename__ = 'operation_parameters'
     name = db.Column(db.String(64), primary_key=True)                     # The name of the parameter
@@ -453,10 +480,11 @@ class OperationParameter(db.Model):
         return operation_parameter
 
 
-# The different types that settings and parameter tables can have.
-# int:          An integer value
-# datetime:     A datetime value
+# The Type table stores the different types that settings and parameter tables can have
 # boolean:      A boolean value
+# datetime:     A datetime value
+# int:          An integer value
+# string:       A string value
 class Type(db.Model):
     __tablename__ = 'types'
     name = db.Column(db.String(64), primary_key=True)
@@ -465,7 +493,7 @@ class Type(db.Model):
     def __repr__(self):
         return self.name
 
-    # Parses the value (String) of a ServerSetting or OperationParameter to the corresponding type
+    # Parses the value (name) of a ServerSetting or OperationParameter to the corresponding type
     def parse_value(self, value):
 
         # If there is no value, we don't have to parse anything
@@ -491,6 +519,7 @@ class Type(db.Model):
             return bool(int(value))
 
 
+# The User table contains all registered users of the GreenZora server
 class User(UserMixin, db.Model):
     __tablename = 'users'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -503,13 +532,16 @@ class User(UserMixin, db.Model):
         self.email = email
         self.set_password(password)
 
+    # Generates a hash from a password and stores it
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
+    # Checks if the password is correct
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
 
+# This function is needed for authentication system
 @login.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -519,6 +551,8 @@ def load_user(user_id):
 
 # ------------ INITIALIZE DATABASE ---------------
 
+# This function initializes the database by creating it (if necessary) and the default types, settings and
+# operation parameters
 def initialize_db():
 
     # Create the database tables if they don't already exist
@@ -532,15 +566,18 @@ def initialize_db():
 
         # Initialize the default types
     initialize_types()
-    print('Types initialized')
+    if is_debug():
+        print('Types initialized')
 
     # Initialize the default settings
     initialize_default_settings()
-    print('Default settings initialized')
+    if is_debug():
+        print('Default settings initialized')
 
     # Initialize the default operation parameters
     initialize_operation_parameters()
-    print('Operation parameters initialized')
+    if is_debug():
+        print('Operation parameters initialized')
 
     # Remember that the database was initialized
     OperationParameter.set('database_initialized', True)
@@ -549,6 +586,7 @@ def initialize_db():
     print('Database initialized')
 
 
+# Initializes the types
 def initialize_types():
     db.session.add(Type(name='int'))
     db.session.add(Type(name='datetime'))
@@ -557,21 +595,24 @@ def initialize_types():
     db.session.commit()
 
 
+# Initializes the default settings
 def initialize_default_settings():
     type_string = db.session.query(Type).get('string')
     type_int = db.session.query(Type).get('int')
-    db.session.add(ServerSetting(name='zora_url', value=server_app.config['DEFAULT_ZORA_URL'], type=type_string))
-    db.session.add(ServerSetting(name='zora_pull_interval', value=server_app.config['DEFAULT_ZORA_PULL_INTERVAL'], type=type_int))
-    db.session.add(ServerSetting(name='resource_type_update_interval', value=server_app.config['DEFAULT_RESOURCE_TYPE_UPDATE_INTERVAL'], type=type_int))
+    db.session.add(ServerSetting(name='annotation_timeout', value=server_app.config['ANNOTATION_TIMEOUT'], type=type_int))
     db.session.add(ServerSetting(name='institute_update_interval', value=server_app.config['DEFAULT_INSTITUTE_UPDATE_INTERVAL'], type=type_int))
+    db.session.add(ServerSetting(name='resource_type_update_interval', value=server_app.config['DEFAULT_RESOURCE_TYPE_UPDATE_INTERVAL'], type=type_int))
+    db.session.add(ServerSetting(name='zora_pull_interval', value=server_app.config['DEFAULT_ZORA_PULL_INTERVAL'], type=type_int))
+    db.session.add(ServerSetting(name='zora_url', value=server_app.config['DEFAULT_ZORA_URL'], type=type_string))
     db.session.commit()
 
 
+# Initializes the operation_parameters
 def initialize_operation_parameters():
     type_datetime = db.session.query(Type).get('datetime')
     type_boolean = db.session.query(Type).get('boolean')
-    db.session.add(OperationParameter(name='last_zora_pull', type=type_datetime))
     db.session.add(OperationParameter(name='database_initialized', value=False, type=type_boolean))
+    db.session.add(OperationParameter(name='last_zora_pull', type=type_datetime))
     db.session.add(OperationParameter(name='legacy_annotations_imported', value=False, type=type_boolean))
     db.session.commit()
 

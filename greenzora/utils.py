@@ -1,4 +1,4 @@
-from server import server_app
+from greenzora import server_app
 
 
 def is_debug():
