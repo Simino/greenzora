@@ -1,15 +1,17 @@
-from server import db, server_app
-from server.utils import is_debug
-from server.models import Paper, Institute, ResourceType, ServerSetting, OperationParameter
-from server.zoraAPI import ZoraAPI
-from server.ml_tool import MLTool
+import json
+import pandas as pd
+
+from datetime import datetime
+from flask_apscheduler import APScheduler
 from flask_sqlalchemy import event
 from sqlalchemy.sql import func
-from flask_apscheduler import APScheduler
-from datetime import datetime
 from threading import Timer
-import pandas as pd
-import json
+
+from greenzora import db, server_app
+from greenzora.models import Paper, Institute, ResourceType, ServerSetting, OperationParameter
+from greenzora.ml_tool import MLTool
+from greenzora.utils import is_debug
+from greenzora.zoraAPI import ZoraAPI
 
 
 class ServerLogic:
@@ -17,10 +19,10 @@ class ServerLogic:
     INSTITUTE_UPDATE_JOB_ID = 'institute_update_job'
     RESOURCE_TYPE_UPDATE_JOB_ID = 'resource_type_update_job'
 
-    # Init stuff in __init__?
+    # The __init__ method is used to initialize the greenzora logic
     def __init__(self):
 
-        # Initialize the list of papers that are being annotated at the moment
+        # Initialize the list of papers that are being annotated currently
         self.annotations = []
 
         # Initialize the ZORA API
@@ -75,7 +77,7 @@ class ServerLogic:
                                        id=ServerLogic.ZORA_API_JOB_ID)
         print('ZORA pull job started')
 
-        # Register the database event listener for the server settings table
+        # Register the database event listener for the greenzora settings table
         @event.listens_for(ServerSetting.value, 'set')
         def handle_setting_change(target, value, oldvalue, initiator):
             self.handle_setting_change(target, value, oldvalue, initiator)
@@ -98,7 +100,7 @@ class ServerLogic:
         print('Storing papers...')
         for metadata_dict in metadata_dict_list:
 
-            # If the paper got deleted, we want to delete it as well
+            # If the paper got deleted from ZORA, we want to delete it as well
             if 'deleted' in metadata_dict and metadata_dict['deleted']:
                 paper = db.session.query(Paper).get(metadata_dict['uid'])
                 if paper:
@@ -116,9 +118,8 @@ class ServerLogic:
 
             if is_debug():
                 count += 1
-                if count % 1000 == 0:
+                if is_debug() and count % 1000 == 0:
                     print('Count: ' + str(count))
-                # print(paper)
         print(count)
         print('Done')
 
@@ -130,6 +131,7 @@ class ServerLogic:
         if is_debug():
             print('Duration: ' + str(datetime.utcnow() - new_last_zora_pull))
 
+    # This method loads all legacy annotations from the legacy_annotations.json if they are not loaded already
     @staticmethod
     def import_legacy_annotations(file_path):
 
@@ -157,14 +159,12 @@ class ServerLogic:
             else:
                 paper = Paper.create_or_update(paper_dict)
                 db.session.add(paper)
-
-            if is_debug():
-                count += 1
+            count += 1
+            if is_debug() and count % 100 == 0:
                 print('Count: ' + str(count))
-                print(paper)
 
-        # Update legacy_annotations_imported so we know we don't have to import them anymore on a server startup. Then
-        # commit the transaction.
+        # Update legacy_annotations_imported so we know we don't have to import them anymore on a greenzora startup.
+        # Then commit the transaction.
         OperationParameter.set('legacy_annotations_imported', True)
         db.session.commit()
 
@@ -177,6 +177,8 @@ class ServerLogic:
             self.store_institute_hierarchy(institute_name, children_dict, None)
         db.session.commit()
 
+    # A recursive method that explores the tree structure of the institutes dictionary and stores the institutes with
+    # their corresponding parent institute.
     def store_institute_hierarchy(self, current_name, children_dict, parent):
         current_institute = db.session.query(Institute).filter(Institute.name == current_name, Institute.parent == parent).first()
         if not current_institute:
@@ -187,6 +189,7 @@ class ServerLogic:
             for child_name, child_children_dict in children_dict.items():
                 self.store_institute_hierarchy(child_name, child_children_dict, current_institute)
 
+    # Loads the resource_types from ZORA and stores them in the database
     def load_resource_types(self):
         resource_type_list = self.zoraAPI.get_resource_types()
         for resource_type in resource_type_list:
@@ -213,13 +216,16 @@ class ServerLogic:
         if is_debug():
             print('Setting "' + setting_name + '" was changed to ' + str(value) + '.')
 
+    # Picks a paper from all papers that are not yet annotated and not currently being annotated
     def get_annotation(self):
         paper = db.session.query(Paper).filter(Paper.annotated == False, Paper.uid.notin_(self.annotations)).order_by(func.random()).first()
         self.annotations.append(paper.uid)
-        timer = Timer(10.0, self.timeout_annotation, [paper.uid])
+        annotation_timeout = ServerSetting.get('annotation_timeout')
+        timer = Timer(annotation_timeout, self.timeout_annotation, [paper.uid])
         timer.start()
         return paper
 
+    # Sets the annotated and sustainable properties of a paper based on how it got annotated
     def set_annotation(self, uid, sustainable):
         if uid in self.annotations:
             self.annotations.remove(uid)
@@ -231,10 +237,12 @@ class ServerLogic:
         else:
             return 408
 
+    # Timeouts annotations and removes them from the list of currently processed papers when they take too long.
     def timeout_annotation(self, uid):
         if uid in self.annotations:
             self.annotations.remove(uid)
 
+    # Trains the machine learning tool with all annotated papers
     def train_ml_tool(self):
 
         # Get the relevant papers needed for the training
@@ -248,6 +256,7 @@ class ServerLogic:
         # Train the classifier
         self.ml_tool.train_classifier(training_data, labels)
 
+    # This method takes a DataFrame as input and returns a Series with the prepared data
     @staticmethod
     def prepare_data(dataframe: pd.DataFrame):
         dataframe['title'].fillna('', inplace=True)
@@ -255,7 +264,7 @@ class ServerLogic:
         dataframe['data'] = dataframe["title"] + " | " + dataframe["description"]
         return dataframe.data
 
-    # TODO
+    # Creates a new model based on all currently annotated papers and classifies all the papers again.
     def create_new_model(self):
 
         # Reset the machine learning model
