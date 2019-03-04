@@ -12,7 +12,7 @@ server_app.config.from_object('config')
 db = SQLAlchemy(server_app)
 
 # Initialize the LoginManager
-login = LoginManager(server_app)
+login_manager = LoginManager(server_app)
 
 # NOTE: These imports are not at the top of the file to avoid circular imports (we need server_app)
 from greenzora import models, server_logic, routes

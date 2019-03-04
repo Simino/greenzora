@@ -7,7 +7,7 @@ from flask_login import UserMixin
 from sqlalchemy.sql import func
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from greenzora import server_app, db, login
+from greenzora import server_app, db, login_manager
 from greenzora.utils import is_debug
 
 # Set the default font for the papers per year plot
@@ -519,18 +519,21 @@ class Type(db.Model):
             return bool(int(value))
 
 
-# The User table contains all registered users of the GreenZora server
+# The User table contains all registered users of the GreenZora server. A user has a username, an email address,
+# a password and a user role ('annotator' or 'admin'). The password gets stored in a hashed form on the server.
 class User(UserMixin, db.Model):
     __tablename = 'users'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(64), unique=True)
     email = db.Column(db.String(128), unique=True)
     password_hash = db.Column(db.String(128))
+    user_role = db.Column(db.String(128))
 
-    def __init__(self, username, email, password):
+    def __init__(self, username, email, password, user_role):
         self.username = username
         self.email = email
         self.set_password(password)
+        self.user_role = user_role
 
     # Generates a hash from a password and stores it
     def set_password(self, password):
@@ -540,9 +543,13 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    # Gets the user role
+    def get_user_role(self):
+        return self.user_role
 
-# This function is needed for authentication system
-@login.user_loader
+
+# This function is needed for flask login
+@login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
@@ -579,6 +586,11 @@ def initialize_db():
     if is_debug():
         print('Operation parameters initialized')
 
+    # Initialize the default admin user
+    initialize_default_users()
+    if is_debug():
+        print('Default users initialized')
+
     # Remember that the database was initialized
     OperationParameter.set('database_initialized', True)
     db.session.commit()
@@ -599,7 +611,7 @@ def initialize_types():
 def initialize_default_settings():
     type_string = db.session.query(Type).get('string')
     type_int = db.session.query(Type).get('int')
-    db.session.add(ServerSetting(name='annotation_timeout', value=server_app.config['ANNOTATION_TIMEOUT'], type=type_int))
+    db.session.add(ServerSetting(name='annotation_timeout', value=server_app.config['DEFAULT_ANNOTATION_TIMEOUT'], type=type_int))
     db.session.add(ServerSetting(name='institute_update_interval', value=server_app.config['DEFAULT_INSTITUTE_UPDATE_INTERVAL'], type=type_int))
     db.session.add(ServerSetting(name='resource_type_update_interval', value=server_app.config['DEFAULT_RESOURCE_TYPE_UPDATE_INTERVAL'], type=type_int))
     db.session.add(ServerSetting(name='zora_pull_interval', value=server_app.config['DEFAULT_ZORA_PULL_INTERVAL'], type=type_int))
@@ -614,6 +626,12 @@ def initialize_operation_parameters():
     db.session.add(OperationParameter(name='database_initialized', value=False, type=type_boolean))
     db.session.add(OperationParameter(name='last_zora_pull', type=type_datetime))
     db.session.add(OperationParameter(name='legacy_annotations_imported', value=False, type=type_boolean))
+    db.session.commit()
+
+
+# Initializes the default users
+def initialize_default_users():
+    db.session.add(User(username='admin', email='', password='init', user_role='admin'))
     db.session.commit()
 
 # ------------ END INITIALIZE DATABASE ---------------
