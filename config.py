@@ -1,4 +1,5 @@
 import os
+from server import server_app
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -13,3 +14,6 @@ DEFAULT_ZORA_URL = 'https://www.zora.uzh.ch/cgi/oai2'
 
 # Machine Learning Tool
 LEGACY_ANNOTATIONS_PATH = os.path.join(BASE_DIR, 'server\static\legacy_annotations.json')
+
+SECRET_KEY = os.urandom(32)
+server_app.config['SECRET_KEY'] = SECRET_KEY

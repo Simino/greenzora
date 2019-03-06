@@ -4,7 +4,24 @@ from server.models import Paper, ServerSetting, User
 from flask_login import current_user, login_user, logout_user
 import sqlite3
 import jinja2
-import server.queryFactory as factory
+from sqlalchemy import extract
+from datetime import datetime
+from flask_wtf import Form
+from wtforms import validators, StringField, PasswordField
+from flask_login import LoginManager
+
+login_manager = LoginManager()
+login_manager.init_app(server_app)
+
+class LoginForm(Form):
+    username = StringField('Username:')
+    password = StringField('Password:')
+
+class NewUserForm(Form):
+    username = StringField('Enter a new Username', [validators.Length(min=4, max=25)])
+    email = StringField('Enter Email Adress', [validators.Length(min=6, max=35)])
+    password = PasswordField('Enter a password', [validators.DataRequired(), validators.EqualTo('confirm', message='Passwords must match')])
+    confirm = PasswordField('Repeat the password')
 
 # ----------------- ROUTES -----------------------
 
@@ -25,7 +42,9 @@ def form():
     all_sustainable_papers = db.session.query(Paper).filter(Paper.sustainable == True).all()
 
     all_sustainable_paper_creators = db.session.query(models.PaperCreator).filter(models.PaperCreator.paper_uid.in_([paper.uid for paper in all_sustainable_papers])).all()
-    creators = db.session.query(models.Creator).filter(models.Creator.id.in_([c.creator_id for c in all_sustainable_paper_creators])).all()
+    #creators = db.session.query(models.Creator).filter(models.Creator.id.in_([c.creator_id for c in all_sustainable_paper_creators])).all()
+
+    creators = db.session.query(Paper.creators).filter(Paper.sustainable == True).all()
 
     all_sustainable_paper_keywords = db.session.query(models.PaperKeyword).filter(models.PaperKeyword.paper_uid.in_([paper.uid for paper in all_sustainable_papers])).all()
     keywords = db.session.query(models.Keyword).filter(models.Keyword.id.in_([k.keyword_id for k in all_sustainable_paper_keywords])).all()
@@ -84,15 +103,37 @@ def sresults():
                 paperddcs = db.session.query(models.PaperDDC).filter(
                     models.PaperDDC.ddc_dewey_number == ddc_select).all()
                 matching_papers = matching_papers.filter(Paper.uid.in_([p.paper_uid for p in paperddcs]))
+        if 'date_min' in request.form:
+            if not request.form['date_min'] == '':
+                date_min = request.form['date_min']
+                matching_papers = matching_papers.filter(extract('year', Paper.date) >= int(date_min))
+        if 'date_max' in request.form:
+            if not request.form['date_max'] == '':
+                date_max = request.form['date_max']
+                matching_papers = matching_papers.filter(extract('year', Paper.date) <= int(date_max))
     matching_papers = matching_papers.all()
     return render_template('results.html', papers=matching_papers)
 
+
+@server_app.route('/createuser', methods=['GET', 'POST'])
+def create_user():
+    form = NewUserForm(request.form)
+    if request.method == 'POSTT' and form.validate():
+            username = form.username.data
+            email = form.email.data
+            password = form.password.data
+            user = User(username = username, email=email, password=password)
+            db.session.add(user)
+            db.session.commit()
+            flash('Sucessfully registered')
+            return redirect(url_for('/createuser'))
+    return render_template('createUser.html', form=form)
 
 @server_app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('/annotation'))
-    form = 'TODO'   # LoginForm()
+    form = LoginForm(request.form)
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user is None or not user.check_password(form.password.data):
@@ -100,7 +141,7 @@ def login():
             return redirect(url_for('/login'))
         login_user(user, remember=form.remember_me.data)
         return redirect(url_for('/annotation'))
-    return 'TODO'   # render_template('login.html', title='Sign In', form=form)
+    return render_template('login.html', title='Sign In', form=form)
 
 
 @server_app.route('/logout')

@@ -12,6 +12,7 @@
             <td>sustainable</td>
             <td>creators</td>
             <td>language</td>
+            <td>date</td>
         </thead>
             {% for paper in papers %}
             <tr>
@@ -24,6 +25,7 @@
                     {% endfor %}
                 </td>
                 <td>{{paper['language']['name']}}</td>
+                <td>{{paper['date']['date']}}</td>
             </tr>
             {% endfor %}
     </table>
