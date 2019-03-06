@@ -1,6 +1,6 @@
 from flask import jsonify, redirect, url_for, flash, render_template, request
-from server import db, server_app, models
-from server.models import Paper, ServerSetting, User
+from greenzora import db, server_app, models
+from greenzora.models import Paper, ServerSetting, User
 from flask_login import current_user, login_user, logout_user
 import sqlite3
 import jinja2
@@ -197,7 +197,7 @@ def set_settings(parameters):
     return jsonify('SOMETHING')
 
 # TODO: Add Rest
-#@server.route('/data/papers/<parameters>', methods=['GET', 'POST'])
+#@greenzora.route('/data/papers/<parameters>', methods=['GET', 'POST'])
 
 # ----------------- END ROUTES -----------------------
 
