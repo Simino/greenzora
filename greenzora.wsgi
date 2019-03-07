@@ -1,0 +1,1 @@
+from greenzora import server_app as application
