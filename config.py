@@ -12,4 +12,4 @@ DEFAULT_INSTITUTE_UPDATE_INTERVAL = 14
 DEFAULT_ZORA_URL = 'https://www.zora.uzh.ch/cgi/oai2'
 
 # Machine Learning Tool
-LEGACY_ANNOTATIONS_PATH = os.path.join(BASE_DIR, 'server\static\legacy_annotations.json')
+LEGACY_ANNOTATIONS_PATH = os.path.join(BASE_DIR, 'server/static/legacy_annotations.json')
