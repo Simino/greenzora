@@ -14,4 +14,3 @@ DEFAULT_ANNOTATION_TIMEOUT = 60                         # minutes
 
 # Machine Learning Tool
 LEGACY_ANNOTATIONS_PATH = os.path.join(BASE_DIR, 'greenzora/static/legacy_annotations.json')
-LEGACY_ANNOTATIONS_PATH = os.path.join(BASE_DIR, 'greenzora\static\legacy_annotations.json')
