@@ -1,16 +1,20 @@
+import re
+
+from http.client import RemoteDisconnected
 from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, oai_dc_reader
 from oaipmh.error import NoRecordsMatchError
-from server import db
-from server.models import Institute, ResourceType
-from http.client import RemoteDisconnected
-import re
+
+from greenzora import db
+from greenzora.models import Institute, ResourceType
+from greenzora.utils import is_debug
 
 
-#
+# The ZoraAPI class connects to the ZORA API and gets various information from it
 class ZoraAPI:
     METADATA_PREFIX = 'oai_dc'
 
+    # In the constructor, we register to the ZORA API and initialize the necessary class variables
     def __init__(self, url):
         registry = MetadataRegistry()
         registry.registerReader(ZoraAPI.METADATA_PREFIX, oai_dc_reader)
@@ -19,12 +23,15 @@ class ZoraAPI:
         self.resource_types = []
         self.load_institutes_and_types()
 
+    # Returns the hierarchical dictionary of institutes
     def get_institutes(self):
         return self.institutes
 
+    # Returns the list of resource types
     def get_resource_types(self):
         return self.resource_types
 
+    # Loads all institutes and resource types. The institutes also get parsed into a hierarchical dictionary.
     def load_institutes_and_types(self):
         institutes_list = []
         resource_type_list = []
@@ -41,6 +48,7 @@ class ZoraAPI:
         self.institutes = institutes_dict
         self.resource_types = resource_type_list
 
+    # Parses a list of institutes into a hierarchical dictionary
     @staticmethod
     def parse_institutes(institute_list_raw):
         institutes_dict = {}
@@ -53,19 +61,18 @@ class ZoraAPI:
                 parent = parent[institute]
         return institutes_dict
 
-    # Get all metadata dictionaries from
+    # Get all metadata dictionaries from ZORA
     def get_metadata_dicts(self, from_):
         record_list = self.get_records(from_)
         metadata_dict_list = self.parse_records(record_list)
         return metadata_dict_list
 
-    # Gets one specific paper from the ZORA repository and returns the metadata from it
+    # Gets one specific paper from the ZORA repository and returns the record of it
     def get_record(self, uid):
         record = self.client.getRecord(identifier=uid, metadataPrefix=ZoraAPI.METADATA_PREFIX)
-
         return record
 
-    # Gets the papers from the ZORA repository and returns their metadata in form of a list of dictionaries
+    # Gets the papers from the ZORA repository and returns their records in form of a list
     def get_records(self, from_):
         args = {'metadataPrefix': ZoraAPI.METADATA_PREFIX}
 
@@ -83,25 +90,20 @@ class ZoraAPI:
             for record in record_iterator:
                 record_list.append(record)
                 count += 1
-                if count % 1000 == 0:
+                if is_debug() and count % 1000 == 0:
                     print(str(count))
-                # TODO: Remove
-                #if count >= 2000:
-                    #break
             print(count)
             print('Done')
         except NoRecordsMatchError:
             print('No records were found')
         except RemoteDisconnected as error:
-            # TODO: How to behave if disconnected? repeat? if yes, how many times and in what intervals?
-            # TODO: Test if this works as intended
             print(error)
         except Exception as error:
             print(error)
         finally:
             return record_list
 
-    # This method parses the a record from ZORA in a easier to use dictionary.
+    # This method parses a list of records from ZORA in a easier to use metadata dictionary.
     def parse_records(self, record_list):
         metadata_dict_list = []
         print('Parsing records...')

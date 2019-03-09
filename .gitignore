@@ -7,11 +7,6 @@ venv/
 # Database
 database.db
 
-# Machine learning unused legacy data
-data/
-config.json
-RunModel_v2.py
-
 *.pyc
 __pycache__/
 
