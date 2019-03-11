@@ -39,7 +39,6 @@ class NewUserForm(FlaskForm):
     email = StringField('Enter Email Adress', [validators.Length(min=6, max=35), validators.DataRequired()])
     password = PasswordField('Enter a password', [validators.DataRequired(), validators.EqualTo('confirm', message='Passwords must match')])
     confirm = PasswordField('Repeat the password', [validators.DataRequired()])
-import greenzora.queryFactory as factory
 
 # ----------------- ROUTES -----------------------
 
