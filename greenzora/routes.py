@@ -4,9 +4,57 @@ from greenzora.models import Paper, ServerSetting, User
 from flask_login import current_user, login_user, logout_user
 import sqlite3
 import jinja2
+from sqlalchemy import extract
+from datetime import datetime
+from flask_wtf import FlaskForm
+from wtforms import validators, StringField, PasswordField, BooleanField, SubmitField
+from flask_login import LoginManager
+
+login_manager = LoginManager()
+login_manager.init_app(server_app)
+
+#@login_manager.user_loader()
+#def load_user(user_id):
+    #return User.get(user_id)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+class AnnotationForm(FlaskForm):
+    sustainable = BooleanField('Annotate as sustainable:')
+    not_sustainable = BooleanField('Annotate as not sustainable')
+    save = SubmitField('Save annotation')
+
+class LoginForm(FlaskForm):
+    username = StringField('Username:', [validators.DataRequired()])
+    password = StringField('Password:', [validators.DataRequired()])
+    login = SubmitField('Login')
+    remember_me = BooleanField('Remember Me')
+
+
+class NewUserForm(FlaskForm):
+    username = StringField('Enter a new Username', [validators.DataRequired(), validators.Length(min=4, max=25)])
+    email = StringField('Enter Email Adress', [validators.Length(min=6, max=35), validators.DataRequired()])
+    password = PasswordField('Enter a password', [validators.DataRequired(), validators.EqualTo('confirm', message='Passwords must match')])
+    confirm = PasswordField('Repeat the password', [validators.DataRequired()])
 import greenzora.queryFactory as factory
 
 # ----------------- ROUTES -----------------------
+
+@server_app.route('/test', methods=['GET', 'POST'])
+def test():
+    form = LoginForm(request.form)
+    if request.method == 'POST':
+        print('Post request sent')
+        flash('Post request sent')
+        if form.validate():
+            print('form validated')
+            flash('form validated')
+    if request.method == 'GET':
+        flash('Get request sent')
+    return render_template('formtest.html', form=form)
 
 @server_app.route('/')
 @server_app.route('/index')
@@ -26,6 +74,8 @@ def form():
 
     all_sustainable_paper_creators = db.session.query(models.PaperCreator).filter(models.PaperCreator.paper_uid.in_([paper.uid for paper in all_sustainable_papers])).all()
     creators = db.session.query(models.Creator).filter(models.Creator.id.in_([c.creator_id for c in all_sustainable_paper_creators])).all()
+
+    #creators = db.session.query(Paper.creators).filter(Paper.sustainable == True).all()
 
     all_sustainable_paper_keywords = db.session.query(models.PaperKeyword).filter(models.PaperKeyword.paper_uid.in_([paper.uid for paper in all_sustainable_papers])).all()
     keywords = db.session.query(models.Keyword).filter(models.Keyword.id.in_([k.keyword_id for k in all_sustainable_paper_keywords])).all()
@@ -84,23 +134,59 @@ def sresults():
                 paperddcs = db.session.query(models.PaperDDC).filter(
                     models.PaperDDC.ddc_dewey_number == ddc_select).all()
                 matching_papers = matching_papers.filter(Paper.uid.in_([p.paper_uid for p in paperddcs]))
+        if 'date_min' in request.form:
+            if not request.form['date_min'] == '':
+                date_min = request.form['date_min']
+                matching_papers = matching_papers.filter(extract('year', Paper.date) >= int(date_min))
+        if 'date_max' in request.form:
+            if not request.form['date_max'] == '':
+                date_max = request.form['date_max']
+                matching_papers = matching_papers.filter(extract('year', Paper.date) <= int(date_max))
     matching_papers = matching_papers.all()
     return render_template('results.html', papers=matching_papers)
 
 
+@server_app.route('/annotate', methods=['GET', 'POST'])
+def annotate():
+    form = AnnotationForm(request.form)
+    testpaper = db.session.query(Paper).first()
+
+    if request.method == 'POST':
+        #save classification
+        return redirect(url_for('annotate'))
+    return render_template('annotate.html', form=form, paper=testpaper)
+
+@server_app.route('/createuser', methods=['GET', 'POST'])
+def create_user():
+    form = NewUserForm(request.form)
+    if request.method == 'POST':
+        if form.validate:
+            username = form.username.data
+            email = form.email.data
+            password = form.password.data
+            user = User(username, email, password, 'annotator')
+            db.session.add(user)
+            db.session.commit()
+            flash('Sucessfully registered')
+            registered_users = db.session.query(User).all()
+            print(registered_users)
+            return redirect(url_for('index'))
+        print('request posted but not validated')
+    return render_template('createUser.html', form=form)
+
 @server_app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('/annotation'))
-    form = 'TODO'   # LoginForm()
-    if form.validate_on_submit():
+        return redirect(url_for('/annotate'))
+    form = LoginForm(request.form)
+    if request.method == 'POST' and form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user is None or not user.check_password(form.password.data):
             flash('Invalid username or password')
-            return redirect(url_for('/login'))
+            return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
-        return redirect(url_for('/annotation'))
-    return 'TODO'   # render_template('login.html', title='Sign In', form=form)
+        return redirect(url_for('annotate'))
+    return render_template('login.html', title='Sign In', form=form)
 
 
 @server_app.route('/logout')
